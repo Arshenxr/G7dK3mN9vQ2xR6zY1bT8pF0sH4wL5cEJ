@@ -251,34 +251,22 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     end
 
     -- Rejoin, Hop Server, Hop SmallServer buttons
--- Helper function สำหรับสร้าง dialog ยืนยัน
-local function createConfirmDialog(title, action)
-    Window:Dialog({
-        Title = title,
-        Content = "Are you sure you want to proceed?",
-        Buttons = {
-            {
-                Title = "Confirm",
-                Callback = action
-            },
-            {
-                Title = "Denied",
-                Callback = function() end
+    createServerButton("Rejoin Server", function()
+        Window:Dialog({
+            Title = "Rejoin Server",
+            Content = "Are you sure you want to rejoin?",
+            Buttons = {
+                {
+                    Title = "Confirm",
+                    Callback = function()
+                        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+                    end
+                },
+                { Title = "Denied", Callback = function() end }
             }
-        }
-    })
-end
-
--- Rejoin Server
-createServerButton("Rejoin Server", function()
-    createConfirmDialog("Rejoin Server", function()
-        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+        })
     end)
-end)
-
--- Hop Server (กรณีเซิฟใหญ่)
-createServerButton("Hop Server", function()
-    createConfirmDialog("Hop Server", function()
+    createServerButton("Hop Server", function()
         local TeleportService = game:GetService("TeleportService")
         local HttpService = game:GetService("HttpService")
         local PlaceId, JobId = game.PlaceId, game.JobId
@@ -299,14 +287,11 @@ createServerButton("Hop Server", function()
         if bestServer then
             TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer)
         else
-            TeleportService:Teleport(PlaceId, LocalPlayer)
+            TeleportService
+                :Teleport(PlaceId, LocalPlayer)
         end
     end)
-end)
-
--- Hop SmallServer (กรณีเซิฟเล็ก)
-createServerButton("Hop To SmallServer", function()
-    createConfirmDialog("Hop To SmallServer", function()
+    createServerButton("Hop To SmallServer", function()
         local TeleportService = game:GetService("TeleportService")
         local HttpService = game:GetService("HttpService")
         local PlaceId, JobId = game.PlaceId, game.JobId
@@ -327,11 +312,10 @@ createServerButton("Hop To SmallServer", function()
         if bestServer then
             TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer)
         else
-            TeleportService:Teleport(PlaceId, LocalPlayer)
+            TeleportService
+                :Teleport(PlaceId, LocalPlayer)
         end
     end)
-end)
-
 
     -- Team Switch
     MiscTeamSection:AddButton({
@@ -380,27 +364,27 @@ end)
     end)
 
     -- Instant Context Action (ICA)
-    local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
-        { Title = "Instant Context Action", Default = false })
-    local ICA_Hooked = false
-    ICA_Toggle:OnChanged(function(value)
-        getgenv().InstantContextAction = value
-        if not ICA_Hooked then
-            ICA_Hooked = true
-            for _, v in pairs(getgc(true)) do
-                if type(v) == "function" then
-                    local info = pcall(function() return getinfo(v) end) and getinfo(v) or nil
-                    if info and info.name == "ContextHoldFunc" then
-                        local Old; Old = hookfunction(v, function(...)
-                            local Arguments = { ... }
-                            Arguments[#Arguments] = getgenv().InstantContextAction and 0 or Arguments[#Arguments]
-                            return Old(unpack(Arguments))
-                        end)
-                    end
+local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
+    { Title = "Instant Context Action", Default = false })
+local ICA_Hooked = false
+ICA_Toggle:OnChanged(function(value)
+    getgenv().InstantContextAction = value
+    if not ICA_Hooked then
+        ICA_Hooked = true
+        for _, v in pairs(getgc(true)) do
+            if type(v) == "function" then
+                local info = pcall(function() return getinfo(v) end) and getinfo(v) or nil
+                if info and info.name == "ContextHoldFunc" then
+                    local Old; Old = hookfunction(v, function(...)
+                        local Arguments = { ... }
+                        Arguments[#Arguments] = getgenv().InstantContextAction and 0 or Arguments[#Arguments]
+                        return Old(unpack(Arguments))
+                    end)
                 end
             end
         end
-    end)
+    end
+end)
 
     -- Gun Mods
     local GunToggle = ModAssistSectionMods:AddToggle("GunModToggle", { Title = "Enable Gun Mods", Default = false })
