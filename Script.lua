@@ -183,6 +183,13 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
         if espCache[model] then return end
         local adornee = getAdornee(model)
         if not adornee then return end
+
+        -- ตรวจสอบว่า Camera ยังพร้อม
+        if not Camera then
+            Camera = Workspace.CurrentCamera
+            if not Camera then return end
+        end
+
         local billboard = Instance.new("BillboardGui")
         billboard.Name = "ESP_Billboard"
         billboard.Adornee = adornee
@@ -191,7 +198,8 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
         billboard.AlwaysOnTop = true
         billboard.ResetOnSpawn = false
         billboard.Enabled = ESPSettings.espEnabled
-        local label = Instance.new("TextLabel", billboard)
+
+        local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
         label.Text = getCustomName(model)
@@ -199,6 +207,8 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
         label.TextStrokeTransparency = 0.5
         label.TextSize = 18
         label.Font = Enum.Font.SourceSansBold
+        label.Parent = billboard
+
         billboard.Parent = Camera
         espCache[model] = { billboard = billboard, label = label, adornee = adornee }
     end
