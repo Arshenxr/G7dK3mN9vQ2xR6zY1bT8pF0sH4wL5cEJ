@@ -8,16 +8,51 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local ContentProvider = game:GetService("ContentProvider")
     local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
+local Players = game:GetService("Players")
 
-    local allowedIds = {
-        [1] = true,
-    }
+-- รอ LocalPlayer ให้พร้อม (ปลอดภัยทั้งใน exploit และ LocalScript)
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    LocalPlayer = Players.PlayerAdded:Wait()
+end
 
-    if not allowedIds[LocalPlayer.UserId] then
-        LocalPlayer:Kick("Unauthorized user detected. Access denied.")
-        return
+-- ใส่ UserId ที่อนุญาต (แทนด้วย ID ของคุณ)
+local allowedIds = {
+    [933195] = true, -- <-- เปลี่ยนเป็น UserId ของคุณ
+    -- [987654321] = true, -- เพิ่มได้ถ้าต้องการ
+}
+
+-- ฟังก์ชันตรวจและเตะ
+local function checkAndKick(player)
+    if not player then return false end
+    local id = tonumber(player.UserId) or 0
+    if not allowedIds[id] then
+        -- พยายาม kick ด้วยหลายวิธีเล็กน้อย (pcall เพื่อไม่ให้ error หยุดสคริปต์)
+        local ok, err = pcall(function()
+            -- เรียกแบบ method-style เพื่อทนต่อการ obfuscate ได้ดี
+            player:Kick("Unauthorized user detected. Access denied.")
+        end)
+        if not ok then
+            -- ถ้า Kick ล้มเหลว ให้พยายามอีกครั้งแบบ protected-call
+            pcall(function()
+                local k = player.Kick
+                if type(k) == "function" then
+                    k(player, "Unauthorized user detected. Access denied.")
+                end
+            end)
+        end
+        -- รอเล็กน้อยให้ระบบเตะผู้เล่น (บาง environment ต้องการเวลา)
+        task.wait(0.5)
+        return true
     end
+    return false
+end
+
+-- เรียกเช็กทันที
+local kicked = checkAndKick(LocalPlayer)
+if kicked then
+    return -- หยุดสคริปต์ถ้าเตะแล้ว
+end
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
     -- ถ้า Camera ยังไม่พร้อม ให้รอใน loop เล็ก ๆ
