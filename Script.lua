@@ -8,51 +8,42 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local ContentProvider = game:GetService("ContentProvider")
     local Players = game:GetService("Players")
-local Players = game:GetService("Players")
+    local Players = game:GetService("Players")
 
--- รอ LocalPlayer ให้พร้อม (ปลอดภัยทั้งใน exploit และ LocalScript)
-local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then
-    LocalPlayer = Players.PlayerAdded:Wait()
-end
-
--- ใส่ UserId ที่อนุญาต (แทนด้วย ID ของคุณ)
-local allowedIds = {
-    [973799] = true, -- <-- เปลี่ยนเป็น UserId ของคุณ
-    -- [987654321] = true, -- เพิ่มได้ถ้าต้องการ
-}
-
--- ฟังก์ชันตรวจและเตะ
-local function checkAndKick(player)
-    if not player then return false end
-    local id = tonumber(player.UserId) or 0
-    if not allowedIds[id] then
-        -- พยายาม kick ด้วยหลายวิธีเล็กน้อย (pcall เพื่อไม่ให้ error หยุดสคริปต์)
-        local ok, err = pcall(function()
-            -- เรียกแบบ method-style เพื่อทนต่อการ obfuscate ได้ดี
-            player:Kick("Unauthorized user detected. Access denied.")
-        end)
-        if not ok then
-            -- ถ้า Kick ล้มเหลว ให้พยายามอีกครั้งแบบ protected-call
-            pcall(function()
-                local k = player.Kick
-                if type(k) == "function" then
-                    k(player, )
-                end
-            end)
-        end
-        -- รอเล็กน้อยให้ระบบเตะผู้เล่น (บาง environment ต้องการเวลา)
-        task.wait(0.5)
-        return true
+    -- รอ LocalPlayer ให้พร้อม (ปลอดภัยทั้งใน exploit และ LocalScript)
+    local LocalPlayer = Players.LocalPlayer
+    if not LocalPlayer then
+        LocalPlayer = Players.PlayerAdded:Wait()
     end
-    return false
-end
 
--- เรียกเช็กทันที
-local kicked = checkAndKick(LocalPlayer)
-if kicked then
-    return -- หยุดสคริปต์ถ้าเตะแล้ว
-end
+    -- ใส่ UserId ที่อนุญาต (แทนด้วย ID ของคุณ)
+    local allowedIds = {
+        [973799] = true, -- <-- เปลี่ยนเป็น UserId ของคุณ
+        -- [987654321] = true, -- เพิ่มได้ถ้าต้องการ
+    }
+
+    -- ฟังก์ชันตรวจและเตะ
+    local function checkAndKick(player)
+        if not player then return false end
+        local id = tonumber(player.UserId) or 0
+        if not allowedIds[id] then
+            -- พยายาม kick ด้วยหลายวิธีเล็กน้อย (pcall เพื่อไม่ให้ error หยุดสคริปต์)
+            local ok, err = pcall(function()
+                -- เรียกแบบ method-style เพื่อทนต่อการ obfuscate ได้ดี
+                player:Kick("Unauthorized user detected. Access denied.")
+            end)
+            -- รอเล็กน้อยให้ระบบเตะผู้เล่น (บาง environment ต้องการเวลา)
+            task.wait(0.5)
+            return true
+        end
+        return false
+    end
+
+    -- เรียกเช็กทันที
+    local kicked = checkAndKick(LocalPlayer)
+    if kicked then
+        return -- หยุดสคริปต์ถ้าเตะแล้ว
+    end
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
     -- ถ้า Camera ยังไม่พร้อม ให้รอใน loop เล็ก ๆ
@@ -420,27 +411,27 @@ end
     end)
 
     -- Instant Context Action (ICA)
-local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
-    { Title = "Instant Context Action", Default = false })
-local ICA_Hooked = false
-ICA_Toggle:OnChanged(function(value)
-    getgenv().InstantContextAction = value
-    if not ICA_Hooked then
-        ICA_Hooked = true
-        for _, v in pairs(getgc(true)) do
-            if type(v) == "function" then
-                local info = pcall(function() return getinfo(v) end) and getinfo(v) or nil
-                if info and info.name == "ContextHoldFunc" then
-                    local Old; Old = hookfunction(v, function(...)
-                        local Arguments = { ... }
-                        Arguments[#Arguments] = getgenv().InstantContextAction and 0 or Arguments[#Arguments]
-                        return Old(unpack(Arguments))
-                    end)
+    local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
+        { Title = "Instant Context Action", Default = false })
+    local ICA_Hooked = false
+    ICA_Toggle:OnChanged(function(value)
+        getgenv().InstantContextAction = value
+        if not ICA_Hooked then
+            ICA_Hooked = true
+            for _, v in pairs(getgc(true)) do
+                if type(v) == "function" then
+                    local info = pcall(function() return getinfo(v) end) and getinfo(v) or nil
+                    if info and info.name == "ContextHoldFunc" then
+                        local Old; Old = hookfunction(v, function(...)
+                            local Arguments = { ... }
+                            Arguments[#Arguments] = getgenv().InstantContextAction and 0 or Arguments[#Arguments]
+                            return Old(unpack(Arguments))
+                        end)
+                    end
                 end
             end
         end
-    end
-end)
+    end)
 
     -- Gun Mods
     local GunToggle = ModAssistSectionMods:AddToggle("GunModToggle", { Title = "Enable Gun Mods", Default = false })
