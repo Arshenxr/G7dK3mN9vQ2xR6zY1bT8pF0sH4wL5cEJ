@@ -4,7 +4,7 @@ local ScriptModule = {}
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     
     local allowedIDs = {
-    [943369] = true, -- 🔹 ใส่ UserId ของคุณตรงนี้
+    [143369] = true, -- 🔹 ใส่ UserId ของคุณตรงนี้
 }
 
 -- ป้องกันการ Bypass แม้ผ่านการ Obfuscate
