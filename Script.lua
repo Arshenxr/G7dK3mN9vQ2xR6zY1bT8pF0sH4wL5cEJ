@@ -10,9 +10,8 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
 
-    -- ✅ ตรวจสอบไอดีผู้เล่น
     local allowedIds = {
-        [973799] = true,
+        [971499] = true,
     }
 
     if not allowedIds[LocalPlayer.UserId] then
