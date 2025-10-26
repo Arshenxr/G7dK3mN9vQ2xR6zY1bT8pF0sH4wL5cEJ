@@ -1,10 +1,5 @@
 local ScriptModule = {}
 
--- กำหนด UserIds ที่อนุญาต
-local allowedUserIds = {
-    971799,
-}
-
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local Players = game:GetService("Players")
     local LocalPlayer = LocalPlayer or Players.LocalPlayer
@@ -16,7 +11,7 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     end
 
     local allowedUserIds = {
-        973799,
+        971799,
     }
 
     local allowed = false
