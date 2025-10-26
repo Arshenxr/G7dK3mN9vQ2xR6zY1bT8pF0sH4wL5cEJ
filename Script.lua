@@ -3,11 +3,8 @@ local ScriptModule = {}
 
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     -- Services
-    local RunService = game:GetService("RunService")
     local Workspace = game:GetService("Workspace")
     local Players = game:GetService("Players")
-    local Teams = game:GetService("Teams")
-    local Lighting = game:GetService("Lighting")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local ContentProvider = game:GetService("ContentProvider")
 
@@ -76,6 +73,10 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local ModAssistSectionMods = Tabs.ModAndAssist:AddSection("Mods")
 
     -- FullBright
+    local RunService = game:GetService("RunService")
+    local Camera = workspace.CurrentCamera
+    local Teams = game:GetService("Teams")
+    local Lighting = game:GetService("Lighting")
     local FullBrightEnabled = false
     local OldLighting = {}
     local lightingChangedConn
