@@ -10,6 +10,15 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
 
+    -- ✅ ตรวจสอบไอดีผู้เล่น
+    local allowedIds = {
+        [973799] = true,
+    }
+
+    if not allowedIds[LocalPlayer.UserId] then
+        LocalPlayer:Kick("Unauthorized user detected. Access denied.")
+        return
+    end
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
     -- ถ้า Camera ยังไม่พร้อม ให้รอใน loop เล็ก ๆ
