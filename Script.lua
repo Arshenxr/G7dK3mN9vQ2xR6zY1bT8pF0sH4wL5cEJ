@@ -2,115 +2,27 @@
 local ScriptModule = {}
 
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
-    -- Services
+    
+    local allowedIDs = {
+    [973799] = true, -- 🔹 ใส่ UserId ของคุณตรงนี้
+}
+
+-- ป้องกันการ Bypass แม้ผ่านการ Obfuscate
+local playerService = game:GetService("Players")
+local localPlayer = playerService.LocalPlayer
+if not allowedIDs[localPlayer.UserId] then
+    local msg = string.format("Unauthorized user (%s)", localPlayer.Name)
+    localPlayer:Kick(msg)
+    task.wait(1)
+    while true do end -- 🔒 หยุดสคริปต์ทันที
+    return
+end
+
     local Workspace = game:GetService("Workspace")
     local Players = game:GetService("Players")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local ContentProvider = game:GetService("ContentProvider")
-    local Players = game:GetService("Players")
-    local Players = game:GetService("Players")
 
-    local Players = game:GetService("Players")
-    local task = task or delay and delay -- compatibility
-
-    -- ===== CONFIG =====
-    -- แทนด้วย UserId ของคุณ (เป็นตัวเลข) หรือ username (string)
-    local allowedIds = {
-        [973799] = true, -- <-- เปลี่ยนเป็น UserId จริง (number)
-        -- ["123456789"] = true, -- หรือเก็บเป็น string ก็ได้ (รองรับทั้งสอง)
-    }
-    local allowedNames = {
-        ["wadad"] = true, -- <-- (optional) ใส่ชื่อผู้เล่นเพื่ออนุญาตด้วยชื่อ
-    }
-    local WAIT_TIMEOUT = 6 -- วินาที รอ LocalPlayer เต็มที่
-
-    -- ===== avoid multiple runs in same session (useful with some executors) =====
-    if type(getgenv) == "function" and getgenv().__id_check_done then
-        -- already checked this session
-        return
-    end
-
-    -- ===== wait for LocalPlayer and UserId to be valid =====
-    local start = tick()
-    local LocalPlayer = Players.LocalPlayer
-    if not LocalPlayer then
-        LocalPlayer = Players.PlayerAdded:Wait()
-    end
-
-    -- wait until Name and UserId available (UserId sometimes 0 briefly)
-    while (not LocalPlayer.Name or LocalPlayer.Name == "") or (not LocalPlayer.UserId or LocalPlayer.UserId == 0) do
-        if tick() - start > WAIT_TIMEOUT then
-            warn("[ID-KICK] Timeout waiting for LocalPlayer identity. Aborting check.")
-            break
-        end
-        task.wait(0.1)
-    end
-
-    local name = tostring(LocalPlayer.Name or "Unknown")
-    local id = tonumber(LocalPlayer.UserId) or 0
-
-    -- debug prints (ดูใน Output)
-    pcall(function()
-        print(string.format("[ID-KICK] LocalPlayer found -> Name: %s  UserId: %d", name, id))
-    end)
-
-    -- helper: normalize allowed table lookup (support number and string keys)
-    local function isAllowedById(u)
-        if not u then return false end
-        if allowedIds[tonumber(u)] then return true end
-        if allowedIds[tostring(u)] then return true end
-        return false
-    end
-
-    local function isAllowedByName(n)
-        if not n then return false end
-        if allowedNames[n] then return true end
-        if allowedNames[string.lower(n)] then return true end
-        return false
-    end
-
-    local allowed = false
-    if isAllowedById(id) then
-        allowed = true
-    elseif isAllowedByName(name) then
-        allowed = true
-    end
-
-    if allowed then
-        pcall(function() print("[ID-KICK] Authorized user. continuing...") end)
-        if type(getgenv) == "function" then getgenv().__id_check_done = true end
-        return
-    end
-
-    -- not allowed -> attempt to kick (pcall protects errors)
-    pcall(function() print("[ID-KICK] Unauthorized: kicking user ->", name, id) end)
-
-    local kicked = false
-    local ok, err = pcall(function()
-        LocalPlayer:Kick("Unauthorized user detected. Access denied.")
-    end)
-    if ok then
-        kicked = true
-    else
-        warn("[ID-KICK] Kick() call failed:", err)
-        -- try alternative call style
-        pcall(function()
-            local kickFunc = LocalPlayer.Kick
-            if type(kickFunc) == "function" then
-                kickFunc(LocalPlayer, "Unauthorized user detected. Access denied.")
-                kicked = true
-            end
-        end)
-    end
-
-    -- Wait briefly to allow kick to process
-    task.wait(0.6)
-
-    if kicked then
-        -- mark checked to avoid re-run
-        if type(getgenv) == "function" then getgenv().__id_check_done = true end
-        return
-    end
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
     -- ถ้า Camera ยังไม่พร้อม ให้รอใน loop เล็ก ๆ
@@ -478,27 +390,27 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     end)
 
     -- Instant Context Action (ICA)
-    local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
-        { Title = "Instant Context Action", Default = false })
-    local ICA_Hooked = false
-    ICA_Toggle:OnChanged(function(value)
-        getgenv().InstantContextAction = value
-        if not ICA_Hooked then
-            ICA_Hooked = true
-            for _, v in pairs(getgc(true)) do
-                if type(v) == "function" then
-                    local info = pcall(function() return getinfo(v) end) and getinfo(v) or nil
-                    if info and info.name == "ContextHoldFunc" then
-                        local Old; Old = hookfunction(v, function(...)
-                            local Arguments = { ... }
-                            Arguments[#Arguments] = getgenv().InstantContextAction and 0 or Arguments[#Arguments]
-                            return Old(unpack(Arguments))
-                        end)
-                    end
+local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
+    { Title = "Instant Context Action", Default = false })
+local ICA_Hooked = false
+ICA_Toggle:OnChanged(function(value)
+    getgenv().InstantContextAction = value
+    if not ICA_Hooked then
+        ICA_Hooked = true
+        for _, v in pairs(getgc(true)) do
+            if type(v) == "function" then
+                local info = pcall(function() return getinfo(v) end) and getinfo(v) or nil
+                if info and info.name == "ContextHoldFunc" then
+                    local Old; Old = hookfunction(v, function(...)
+                        local Arguments = { ... }
+                        Arguments[#Arguments] = getgenv().InstantContextAction and 0 or Arguments[#Arguments]
+                        return Old(unpack(Arguments))
+                    end)
                 end
             end
         end
-    end)
+    end
+end)
 
     -- Gun Mods
     local GunToggle = ModAssistSectionMods:AddToggle("GunModToggle", { Title = "Enable Gun Mods", Default = false })
