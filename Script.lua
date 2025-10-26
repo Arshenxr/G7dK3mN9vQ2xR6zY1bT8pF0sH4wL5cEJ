@@ -6,7 +6,7 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
 
     -- ตรวจสอบ LocalPlayer พร้อมหรือยัง
     while not LocalPlayer do
-        task.wait(1)
+        task.wait(0.05)
         LocalPlayer = Players.LocalPlayer
     end
 
