@@ -1,47 +1,23 @@
+-- ScriptModule.lua
 local ScriptModule = {}
 
--- กำหนด UserIds ที่อนุญาต
-local allowedUserIds = {
-    973799,
-}
-
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
-    local Players = game:GetService("Players")
-    local LocalPlayer = LocalPlayer or Players.LocalPlayer
-
-    -- ตรวจสอบ LocalPlayer พร้อมหรือยัง
-    while not LocalPlayer do
-        task.wait(0.1)
-        LocalPlayer = Players.LocalPlayer
-    end
-
-    -- เช็คว่า UserId อยู่ใน allowedUserIds หรือไม่
-    local allowed = false
-    for _, id in ipairs(allowedUserIds) do
-        if LocalPlayer.UserId == id then
-            allowed = true
-            break
-        end
-    end
-
-    -- ถ้าไม่อนุญาต ให้เตะออก
-    if not allowed then
-        LocalPlayer:Kick()
-        return
-    end
-
-    -- ===== เริ่มสคริปต์ส่วนที่เหลือ =====
+    -- Services
     local Workspace = game:GetService("Workspace")
+    local Players = game:GetService("Players")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local ContentProvider = game:GetService("ContentProvider")
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
 
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
+    -- ถ้า Camera ยังไม่พร้อม ให้รอใน loop เล็ก ๆ
     local startTime = tick()
     while not Camera do
         task.wait(0.1)
         Camera = Workspace.CurrentCamera
-        if tick() - startTime > 5 then
+        if tick() - startTime > 5 then -- รอไม่เกิน 5 วินาที
             warn("[Westbound.win] CurrentCamera not found!")
             return
         end
