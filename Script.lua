@@ -3,20 +3,65 @@ local ScriptModule = {}
 
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     
-    local allowedIDs = {
-    [1251512313] = true, -- 🔹 ใส่ UserId ของคุณตรงนี้
+-- ======= BEGIN: Robust LocalPlayer UserId check (put near top of Init) =======
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+
+-- ใส่ UserId ที่อนุญาตตรงนี้ (ตัวอย่าง)
+local allowedIDs = {
+    [973799] = true, -- แทนที่ด้วย UserId จริงของคุณ
+    -- [987654321] = true,
 }
 
--- ป้องกันการ Bypass แม้ผ่านการ Obfuscate
-local playerService = game:GetService("Players")
-local localPlayer = playerService.LocalPlayer
-if not allowedIDs[localPlayer.UserId] then
-    local msg = string.format("Unauthorized user (%s)", localPlayer.Name)
-    localPlayer:Kick(msg)
-    task.wait(1)
-    while true do end -- 🔒 หยุดสคริปต์ทันที
-    return
+-- ฟังก์ชันช่วยเหลือ: รอ LocalPlayer (ปลอดภัยถ้าถูกเรียกเร็วเกินไป)
+local function waitForLocalPlayer(timeout)
+    timeout = timeout or 10
+    local start = tick()
+    while not Players.LocalPlayer do
+        if tick() - start > timeout then return nil end
+        task.wait(0.1)
+    end
+    return Players.LocalPlayer
 end
+
+-- ตรวจสอบสิทธิ์และ kick ถ้าไม่ถูกต้อง
+local function enforceUserIdWhitelist()
+    local plr = waitForLocalPlayer(10)
+    if not plr then
+        -- ถ้ายังไม่มี LocalPlayer แสดงว่าอาจรันบน server หรือสภาพแวดล้อมไม่ถูกต้อง
+        warn("[AuthCheck] LocalPlayer not available — make sure this is a LocalScript.")
+        return false
+    end
+
+    local ok, isAllowed = pcall(function()
+        return allowedIDs[plr.UserId] == true
+    end)
+
+    if not ok or not isAllowed then
+        -- พยายาม kick ถ้าเป็นไปได้
+        local reason = "Unauthorized access (UserId mismatch)."
+        pcall(function() plr:Kick(reason) end)
+        -- ถ้า Kick ถูกบล็อค/ไม่ทำงาน ให้พยายาม teleport ออก (fallback)
+        pcall(function() TeleportService:Teleport(game.PlaceId, plr) end)
+
+        -- หยุดการทำงานต่อของสคริปต์อย่างรุนแรง (ถ้า obfuscator ยังรันโค้ดต่อ)
+        -- การทำ loop นี้จะหยุด thread ปัจจุบันไม่ให้ไปรันส่วนอื่น
+        while true do
+            task.wait(1)
+        end
+        return false
+    end
+
+    -- ถ้าถูกต้อง
+    return true
+end
+
+-- เรียกใช้อย่างปลอดภัยตอนเริ่มต้น
+local passed = enforceUserIdWhitelist()
+if not passed then
+    return -- หยุด Init ถ้าไม่ผ่าน
+end
+-- ======== END: Robust LocalPlayer UserId check ========
 
     local Workspace = game:GetService("Workspace")
     local Players = game:GetService("Players")
