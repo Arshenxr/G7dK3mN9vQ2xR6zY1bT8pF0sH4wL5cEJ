@@ -11,7 +11,7 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local LocalPlayer = Players.LocalPlayer
 
     local allowedIds = {
-        [971499] = true,
+        [1] = true,
     }
 
     if not allowedIds[LocalPlayer.UserId] then
