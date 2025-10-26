@@ -1,3 +1,4 @@
+-- ScriptModule.lua
 local ScriptModule = {}
 
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
@@ -250,86 +251,86 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     end
 
     -- Rejoin, Hop Server, Hop SmallServer buttons
-    -- Helper function สำหรับสร้าง dialog ยืนยัน
-    local function createConfirmDialog(title, action)
-        Window:Dialog({
-            Title = title,
-            Content = "Are you sure you want to proceed?",
-            Buttons = {
-                {
-                    Title = "Confirm",
-                    Callback = action
-                },
-                {
-                    Title = "Denied",
-                    Callback = function() end
-                }
+-- Helper function สำหรับสร้าง dialog ยืนยัน
+local function createConfirmDialog(title, action)
+    Window:Dialog({
+        Title = title,
+        Content = "Are you sure you want to proceed?",
+        Buttons = {
+            {
+                Title = "Confirm",
+                Callback = action
+            },
+            {
+                Title = "Denied",
+                Callback = function() end
             }
-        })
-    end
+        }
+    })
+end
 
-    -- Rejoin Server
-    createServerButton("Rejoin Server", function()
-        createConfirmDialog("Rejoin Server", function()
-            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-        end)
+-- Rejoin Server
+createServerButton("Rejoin Server", function()
+    createConfirmDialog("Rejoin Server", function()
+        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
     end)
+end)
 
-    -- Hop Server (กรณีเซิฟใหญ่)
-    createServerButton("Hop Server", function()
-        createConfirmDialog("Hop Server", function()
-            local TeleportService = game:GetService("TeleportService")
-            local HttpService = game:GetService("HttpService")
-            local PlaceId, JobId = game.PlaceId, game.JobId
-            local success, response = pcall(function()
-                return game:HttpGet("https://games.roblox.com/v1/games/" ..
-                    PlaceId .. "/servers/Public?sortOrder=Desc&limit=100")
-            end)
-            if not success then return end
-            local data = HttpService:JSONDecode(response)
-            local bestServer = nil
-            local highestPlayers = 0
-            for _, server in ipairs(data.data) do
-                if server.id ~= JobId and server.playing > highestPlayers and server.playing < server.maxPlayers then
-                    bestServer = server.id
-                    highestPlayers = server.playing
-                end
-            end
-            if bestServer then
-                TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer)
-            else
-                TeleportService:Teleport(PlaceId, LocalPlayer)
-            end
+-- Hop Server (กรณีเซิฟใหญ่)
+createServerButton("Hop Server", function()
+    createConfirmDialog("Hop Server", function()
+        local TeleportService = game:GetService("TeleportService")
+        local HttpService = game:GetService("HttpService")
+        local PlaceId, JobId = game.PlaceId, game.JobId
+        local success, response = pcall(function()
+            return game:HttpGet("https://games.roblox.com/v1/games/" ..
+                PlaceId .. "/servers/Public?sortOrder=Desc&limit=100")
         end)
+        if not success then return end
+        local data = HttpService:JSONDecode(response)
+        local bestServer = nil
+        local highestPlayers = 0
+        for _, server in ipairs(data.data) do
+            if server.id ~= JobId and server.playing > highestPlayers and server.playing < server.maxPlayers then
+                bestServer = server.id
+                highestPlayers = server.playing
+            end
+        end
+        if bestServer then
+            TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer)
+        else
+            TeleportService:Teleport(PlaceId, LocalPlayer)
+        end
     end)
+end)
 
-    -- Hop SmallServer (กรณีเซิฟเล็ก)
-    createServerButton("Hop To SmallServer", function()
-        createConfirmDialog("Hop To SmallServer", function()
-            local TeleportService = game:GetService("TeleportService")
-            local HttpService = game:GetService("HttpService")
-            local PlaceId, JobId = game.PlaceId, game.JobId
-            local success, response = pcall(function()
-                return game:HttpGet("https://games.roblox.com/v1/games/" ..
-                    PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
-            end)
-            if not success then return end
-            local data = HttpService:JSONDecode(response)
-            local bestServer = nil
-            local lowestPlayers = math.huge
-            for _, server in ipairs(data.data) do
-                if server.id ~= JobId and server.playing < lowestPlayers and server.playing < server.maxPlayers then
-                    bestServer = server.id
-                    lowestPlayers = server.playing
-                end
-            end
-            if bestServer then
-                TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer)
-            else
-                TeleportService:Teleport(PlaceId, LocalPlayer)
-            end
+-- Hop SmallServer (กรณีเซิฟเล็ก)
+createServerButton("Hop To SmallServer", function()
+    createConfirmDialog("Hop To SmallServer", function()
+        local TeleportService = game:GetService("TeleportService")
+        local HttpService = game:GetService("HttpService")
+        local PlaceId, JobId = game.PlaceId, game.JobId
+        local success, response = pcall(function()
+            return game:HttpGet("https://games.roblox.com/v1/games/" ..
+                PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
         end)
+        if not success then return end
+        local data = HttpService:JSONDecode(response)
+        local bestServer = nil
+        local lowestPlayers = math.huge
+        for _, server in ipairs(data.data) do
+            if server.id ~= JobId and server.playing < lowestPlayers and server.playing < server.maxPlayers then
+                bestServer = server.id
+                lowestPlayers = server.playing
+            end
+        end
+        if bestServer then
+            TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer)
+        else
+            TeleportService:Teleport(PlaceId, LocalPlayer)
+        end
     end)
+end)
 
 
     -- Team Switch
