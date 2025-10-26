@@ -7,8 +7,9 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local Players = game:GetService("Players")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local ContentProvider = game:GetService("ContentProvider")
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
+    local RunService = game:GetService("RunService")
+    local Teams = game:GetService("Teams")
+    local Lighting = game:GetService("Lighting")
 
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
@@ -75,10 +76,6 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local ModAssistSectionMods = Tabs.ModAndAssist:AddSection("Mods")
 
     -- FullBright
-    local RunService = game:GetService("RunService")
-    local Camera = workspace.CurrentCamera
-    local Teams = game:GetService("Teams")
-    local Lighting = game:GetService("Lighting")
     local FullBrightEnabled = false
     local OldLighting = {}
     local lightingChangedConn
@@ -317,51 +314,77 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
         end
     end)
 
-    -- Team Switch
+    -- Team Switch (แก้ไข)
     MiscTeamSection:AddButton({
         Title = "Become Outlaws",
         Callback = function()
-            if Teams:FindFirstChild("Outlaws") then LocalPlayer.Team = Teams.Outlaws end
-        end
-    })
-    MiscTeamSection:AddButton({
-        Title = "Become Cowboys",
-        Callback = function()
-            if Teams:FindFirstChild("Cowboys") then LocalPlayer.Team = Teams.Cowboys end
-        end
-    })
-
-    -- Auto Heal
-    local AutoHealToggle = ModAssistSectionAssist:AddToggle("AutoHealToggle", { Title = "Auto Heal", Default = false })
-    local HealDebounce = false
-    local PrevHealth = 0
-    AutoHealToggle:OnChanged(function(value) getgenv().AutoHeal = value end)
-    task.spawn(function()
-        while task.wait(0.5) do
-            if getgenv().AutoHeal then
-                local Char = LocalPlayer.Character
-                if Char then
-                    local Hum = Char:FindFirstChildOfClass("Humanoid")
-                    if Hum then
-                        if Hum.Health < 30 and Hum.Health < PrevHealth and not HealDebounce then
-                            HealDebounce = true
-                            PrevHealth = Hum.Health
-                            local Potion = LocalPlayer.Backpack:FindFirstChild("Health Potion") or
-                                Char:FindFirstChild("Health Potion")
-                            if Potion and Potion:FindFirstChild("DrinkPotion") then
-                                pcall(function() Potion.DrinkPotion:InvokeServer() end)
-                            end
-                            task.wait(1)
-                            HealDebounce = false
-                            PrevHealth = Hum.Health
-                        else
-                            PrevHealth = Hum.Health
-                        end
-                    end
+            local team = Teams:FindFirstChild("Outlaws")
+            if team then
+                -- เช็คว่ามี RemoteEvent สำหรับเปลี่ยนทีมไหม
+                local changeTeamEvent = ReplicatedStorage:FindFirstChild("ChangeTeam")
+                if changeTeamEvent and changeTeamEvent:IsA("RemoteEvent") then
+                    changeTeamEvent:FireServer(team)
+                else
+                    -- fallback แบบปกติ
+                    LocalPlayer.Team = team
                 end
             end
         end
+    })
+
+    MiscTeamSection:AddButton({
+        Title = "Become Cowboys",
+        Callback = function()
+            local team = Teams:FindFirstChild("Cowboys")
+            if team then
+                local changeTeamEvent = ReplicatedStorage:FindFirstChild("ChangeTeam")
+                if changeTeamEvent and changeTeamEvent:IsA("RemoteEvent") then
+                    changeTeamEvent:FireServer(team)
+                else
+                    LocalPlayer.Team = team
+                end
+            end
+        end
+    })
+
+    -- Auto Heal (แก้ไข)
+    local AutoHealToggle = ModAssistSectionAssist:AddToggle("AutoHealToggle", { Title = "Auto Heal", Default = false })
+    getgenv().AutoHeal = false
+    AutoHealToggle:OnChanged(function(value)
+        getgenv().AutoHeal = value
     end)
+
+    local function useHealthPotion(humanoid)
+        local Char = LocalPlayer.Character
+        if not Char then return end
+        local potion = LocalPlayer.Backpack:FindFirstChild("Health Potion") or Char:FindFirstChild("Health Potion")
+        if potion and potion:FindFirstChild("DrinkPotion") then
+            pcall(function() potion.DrinkPotion:InvokeServer() end)
+        end
+    end
+
+    -- เชื่อมต่อกับ HealthChanged
+    LocalPlayer.CharacterAdded:Connect(function(Char)
+        local Humanoid = Char:WaitForChild("Humanoid")
+        Humanoid.HealthChanged:Connect(function(health)
+            if getgenv().AutoHeal and health < 30 then
+                useHealthPotion(Humanoid)
+            end
+        end)
+    end)
+
+    -- สำหรับตัวละครที่อยู่ในเกมแล้ว
+    if LocalPlayer.Character then
+        local Humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if Humanoid then
+            Humanoid.HealthChanged:Connect(function(health)
+                if getgenv().AutoHeal and health < 30 then
+                    useHealthPotion(Humanoid)
+                end
+            end)
+        end
+    end
+
 
     -- Instant Context Action (ICA)
     local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
