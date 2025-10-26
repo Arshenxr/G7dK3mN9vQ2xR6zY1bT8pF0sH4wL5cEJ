@@ -371,7 +371,7 @@ local HealDebounce = false
 local PrevHealth = 0
 AutoHealToggle:OnChanged(function(value) getgenv().AutoHeal = value end)
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.2) do
         if getgenv().AutoHeal then
             local Char = LocalPlayer.Character
             if Char then
