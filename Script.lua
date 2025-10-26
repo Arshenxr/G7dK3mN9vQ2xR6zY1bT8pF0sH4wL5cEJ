@@ -1,28 +1,13 @@
 local ScriptModule = {}
 
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-
-local allowedUserIds = { 973799 }
-local allowed = false
-for _, id in ipairs(allowedUserIds) do
-    if LocalPlayer.UserId == id then
-        allowed = true
-        break
-    end
-end
-
-if not allowed then
-    LocalPlayer:Kick("You are not allowed to use this script.")
-    return
-end
-
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     -- Services
     local Workspace = game:GetService("Workspace")
     local Players = game:GetService("Players")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local ContentProvider = game:GetService("ContentProvider")
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
 
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
