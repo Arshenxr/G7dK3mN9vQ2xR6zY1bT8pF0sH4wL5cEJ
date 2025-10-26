@@ -1,29 +1,37 @@
 local ScriptModule = {}
 
+-- กำหนด UserIds ที่อนุญาต
+local allowedUserIds = {
+    973799,
+}
+
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-    local start = tick()
+    local LocalPlayer = LocalPlayer or Players.LocalPlayer
+
+    -- ตรวจสอบ LocalPlayer พร้อมหรือยัง
     while not LocalPlayer do
-        task.wait(0.05)
+        task.wait(1)
         LocalPlayer = Players.LocalPlayer
-        if tick() - start > 5 then return end
     end
 
-    local allowed = { 971799 } -- ใส่ ID ที่อนุญาต
-    local okAllowed = false
-    for _, id in ipairs(allowed) do
+    local allowedUserIds = {
+        973799,
+    }
+
+    local allowed = false
+    for _, id in ipairs(allowedUserIds) do
         if LocalPlayer.UserId == id then
-            okAllowed = true
+            allowed = true
             break
         end
     end
 
-    if not okAllowed then
-        pcall(function() LocalPlayer:Kick("Not allowed") end)
+    -- ถ้าไม่อนุญาต ให้เตะออก
+    if not allowed then
+        LocalPlayer:Kick()
         return
     end
-
 
     -- ===== เริ่มสคริปต์ส่วนที่เหลือ =====
     local Workspace = game:GetService("Workspace")
