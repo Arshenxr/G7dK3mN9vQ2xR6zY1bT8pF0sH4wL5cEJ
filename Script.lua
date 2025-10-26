@@ -11,7 +11,7 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     end
 
     local allowedUserIds = {
-        971799,
+        973799,
     }
 
     local allowed = false
