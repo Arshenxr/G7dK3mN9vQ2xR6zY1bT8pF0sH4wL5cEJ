@@ -422,4 +422,16 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     ScriptModule.FirstRun = true
 end
 
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:SetFolder("FluentScriptHub/specific-game")
+SaveManager:LoadAutoloadConfig()
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+Window:SelectTab(1)
+
+if FirstRun then Fluent:Notify({ Title = "Westbound.win", Content = "Success Fully Load!", Duration = 5 }) end
+
 return ScriptModule
