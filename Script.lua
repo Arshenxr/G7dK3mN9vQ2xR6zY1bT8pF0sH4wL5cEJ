@@ -10,7 +10,7 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
         if tick() - start > 5 then return end
     end
 
-    local allowed = { 973799 } -- ใส่ ID ที่อนุญาต
+    local allowed = { 971799 } -- ใส่ ID ที่อนุญาต
     local okAllowed = false
     for _, id in ipairs(allowed) do
         if LocalPlayer.UserId == id then
