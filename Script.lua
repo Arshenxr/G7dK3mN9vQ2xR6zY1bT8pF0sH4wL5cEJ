@@ -1,19 +1,21 @@
 local ScriptModule = {}
 
+-- กำหนด UserIds ที่อนุญาต
+local allowedUserIds = {
+    973799,
+}
+
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local Players = game:GetService("Players")
     local LocalPlayer = LocalPlayer or Players.LocalPlayer
 
     -- ตรวจสอบ LocalPlayer พร้อมหรือยัง
     while not LocalPlayer do
-        task.wait(0.05)
+        task.wait(0.1)
         LocalPlayer = Players.LocalPlayer
     end
 
-    local allowedUserIds = {
-        973799,
-    }
-
+    -- เช็คว่า UserId อยู่ใน allowedUserIds หรือไม่
     local allowed = false
     for _, id in ipairs(allowedUserIds) do
         if LocalPlayer.UserId == id then
@@ -399,27 +401,27 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     end)
 
     -- Instant Context Action (ICA)
-    local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
-        { Title = "Instant Context Action", Default = false })
-    local ICA_Hooked = false
-    ICA_Toggle:OnChanged(function(value)
-        getgenv().InstantContextAction = value
-        if not ICA_Hooked then
-            ICA_Hooked = true
-            for _, v in pairs(getgc(true)) do
-                if type(v) == "function" then
-                    local info = pcall(function() return getinfo(v) end) and getinfo(v) or nil
-                    if info and info.name == "ContextHoldFunc" then
-                        local Old; Old = hookfunction(v, function(...)
-                            local Arguments = { ... }
-                            Arguments[#Arguments] = getgenv().InstantContextAction and 0 or Arguments[#Arguments]
-                            return Old(unpack(Arguments))
-                        end)
-                    end
+local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle",
+    { Title = "Instant Context Action", Default = false })
+local ICA_Hooked = false
+ICA_Toggle:OnChanged(function(value)
+    getgenv().InstantContextAction = value
+    if not ICA_Hooked then
+        ICA_Hooked = true
+        for _, v in pairs(getgc(true)) do
+            if type(v) == "function" then
+                local info = pcall(function() return getinfo(v) end) and getinfo(v) or nil
+                if info and info.name == "ContextHoldFunc" then
+                    local Old; Old = hookfunction(v, function(...)
+                        local Arguments = { ... }
+                        Arguments[#Arguments] = getgenv().InstantContextAction and 0 or Arguments[#Arguments]
+                        return Old(unpack(Arguments))
+                    end)
                 end
             end
         end
-    end)
+    end
+end)
 
     -- Gun Mods
     local GunToggle = ModAssistSectionMods:AddToggle("GunModToggle", { Title = "Enable Gun Mods", Default = false })
