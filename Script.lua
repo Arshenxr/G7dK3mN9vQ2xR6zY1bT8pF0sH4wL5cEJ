@@ -7,6 +7,8 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local Players = game:GetService("Players")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local ContentProvider = game:GetService("ContentProvider")
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
 
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
