@@ -18,7 +18,7 @@ end
 
 -- ใส่ UserId ที่อนุญาต (แทนด้วย ID ของคุณ)
 local allowedIds = {
-    [933195] = true, -- <-- เปลี่ยนเป็น UserId ของคุณ
+    [973799] = true, -- <-- เปลี่ยนเป็น UserId ของคุณ
     -- [987654321] = true, -- เพิ่มได้ถ้าต้องการ
 }
 
@@ -37,7 +37,7 @@ local function checkAndKick(player)
             pcall(function()
                 local k = player.Kick
                 if type(k) == "function" then
-                    k(player, "Unauthorized user detected. Access denied.")
+                    k(player, )
                 end
             end)
         end
