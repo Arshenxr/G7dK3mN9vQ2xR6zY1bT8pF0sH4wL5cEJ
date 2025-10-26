@@ -2,7 +2,7 @@ local ScriptModule = {}
 
 -- กำหนด UserIds ที่อนุญาต
 local allowedNames = {
-    "wadad",
+    "wadad"
 }
 
 function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
