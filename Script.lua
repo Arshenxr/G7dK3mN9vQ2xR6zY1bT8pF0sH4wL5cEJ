@@ -10,39 +10,106 @@ function ScriptModule.Init(Fluent, SaveManager, InterfaceManager, LocalPlayer)
     local Players = game:GetService("Players")
     local Players = game:GetService("Players")
 
-    -- รอ LocalPlayer ให้พร้อม (ปลอดภัยทั้งใน exploit และ LocalScript)
+    local Players = game:GetService("Players")
+    local task = task or delay and delay -- compatibility
+
+    -- ===== CONFIG =====
+    -- แทนด้วย UserId ของคุณ (เป็นตัวเลข) หรือ username (string)
+    local allowedIds = {
+        [973799] = true, -- <-- เปลี่ยนเป็น UserId จริง (number)
+        -- ["123456789"] = true, -- หรือเก็บเป็น string ก็ได้ (รองรับทั้งสอง)
+    }
+    local allowedNames = {
+        ["wadad"] = true, -- <-- (optional) ใส่ชื่อผู้เล่นเพื่ออนุญาตด้วยชื่อ
+    }
+    local WAIT_TIMEOUT = 6 -- วินาที รอ LocalPlayer เต็มที่
+
+    -- ===== avoid multiple runs in same session (useful with some executors) =====
+    if type(getgenv) == "function" and getgenv().__id_check_done then
+        -- already checked this session
+        return
+    end
+
+    -- ===== wait for LocalPlayer and UserId to be valid =====
+    local start = tick()
     local LocalPlayer = Players.LocalPlayer
     if not LocalPlayer then
         LocalPlayer = Players.PlayerAdded:Wait()
     end
 
-    -- ใส่ UserId ที่อนุญาต (แทนด้วย ID ของคุณ)
-    local allowedIds = {
-        [973799] = true, -- <-- เปลี่ยนเป็น UserId ของคุณ
-        -- [987654321] = true, -- เพิ่มได้ถ้าต้องการ
-    }
-
-    -- ฟังก์ชันตรวจและเตะ
-    local function checkAndKick(player)
-        if not player then return false end
-        local id = tonumber(player.UserId) or 0
-        if not allowedIds[id] then
-            -- พยายาม kick ด้วยหลายวิธีเล็กน้อย (pcall เพื่อไม่ให้ error หยุดสคริปต์)
-            local ok, err = pcall(function()
-                -- เรียกแบบ method-style เพื่อทนต่อการ obfuscate ได้ดี
-                player:Kick("Unauthorized user detected. Access denied.")
-            end)
-            -- รอเล็กน้อยให้ระบบเตะผู้เล่น (บาง environment ต้องการเวลา)
-            task.wait(0.5)
-            return true
+    -- wait until Name and UserId available (UserId sometimes 0 briefly)
+    while (not LocalPlayer.Name or LocalPlayer.Name == "") or (not LocalPlayer.UserId or LocalPlayer.UserId == 0) do
+        if tick() - start > WAIT_TIMEOUT then
+            warn("[ID-KICK] Timeout waiting for LocalPlayer identity. Aborting check.")
+            break
         end
+        task.wait(0.1)
+    end
+
+    local name = tostring(LocalPlayer.Name or "Unknown")
+    local id = tonumber(LocalPlayer.UserId) or 0
+
+    -- debug prints (ดูใน Output)
+    pcall(function()
+        print(string.format("[ID-KICK] LocalPlayer found -> Name: %s  UserId: %d", name, id))
+    end)
+
+    -- helper: normalize allowed table lookup (support number and string keys)
+    local function isAllowedById(u)
+        if not u then return false end
+        if allowedIds[tonumber(u)] then return true end
+        if allowedIds[tostring(u)] then return true end
         return false
     end
 
-    -- เรียกเช็กทันที
-    local kicked = checkAndKick(LocalPlayer)
+    local function isAllowedByName(n)
+        if not n then return false end
+        if allowedNames[n] then return true end
+        if allowedNames[string.lower(n)] then return true end
+        return false
+    end
+
+    local allowed = false
+    if isAllowedById(id) then
+        allowed = true
+    elseif isAllowedByName(name) then
+        allowed = true
+    end
+
+    if allowed then
+        pcall(function() print("[ID-KICK] Authorized user. continuing...") end)
+        if type(getgenv) == "function" then getgenv().__id_check_done = true end
+        return
+    end
+
+    -- not allowed -> attempt to kick (pcall protects errors)
+    pcall(function() print("[ID-KICK] Unauthorized: kicking user ->", name, id) end)
+
+    local kicked = false
+    local ok, err = pcall(function()
+        LocalPlayer:Kick("Unauthorized user detected. Access denied.")
+    end)
+    if ok then
+        kicked = true
+    else
+        warn("[ID-KICK] Kick() call failed:", err)
+        -- try alternative call style
+        pcall(function()
+            local kickFunc = LocalPlayer.Kick
+            if type(kickFunc) == "function" then
+                kickFunc(LocalPlayer, "Unauthorized user detected. Access denied.")
+                kicked = true
+            end
+        end)
+    end
+
+    -- Wait briefly to allow kick to process
+    task.wait(0.6)
+
     if kicked then
-        return -- หยุดสคริปต์ถ้าเตะแล้ว
+        -- mark checked to avoid re-run
+        if type(getgenv) == "function" then getgenv().__id_check_done = true end
+        return
     end
     -- Ensure CurrentCamera is ready
     local Camera = Workspace.CurrentCamera
