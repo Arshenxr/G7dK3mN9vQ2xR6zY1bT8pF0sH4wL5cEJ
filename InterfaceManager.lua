@@ -1,7 +1,7 @@
 local httpService = game:GetService("HttpService")
 
 local InterfaceManager = {} do
-	InterfaceManager.Folder = "FluentSettings"
+	InterfaceManager.Folder = "westbound.win"
     InterfaceManager.Settings = {
         Theme = "Amethyst",
         Acrylic = false,
