@@ -302,8 +302,8 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 	SaveManager:SetLibrary(Fluent);
 	InterfaceManager:SetLibrary(Fluent);
 	SaveManager:IgnoreThemeSettings();
-	InterfaceManager:SetFolder("FluentScriptHub");
-	SaveManager:SetFolder("FluentScriptHub/specific-game");
+	InterfaceManager:SetFolder("Westbound.Hub");
+	SaveManager:SetFolder("Westbound.Hub/specific-game");
 	SaveManager:LoadAutoloadConfig();
 	InterfaceManager:BuildInterfaceSection(Tabs.Settings);
 	SaveManager:BuildConfigSection(Tabs.Settings);
