@@ -191,6 +191,18 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager, LocalPlayer)
 		end
 	end);
 
+	local MiscTeamSection = Tabs.Miscellaneous:AddSection("Team");
+	MiscTeamSection:AddButton({Title="Become Outlaws",Callback=function()
+		if Teams:FindFirstChild("Outlaws") then
+			LocalPlayer.Team = Teams.Outlaws;
+		end
+	end});
+	MiscTeamSection:AddButton({Title="Become Cowboys",Callback=function()
+		if Teams:FindFirstChild("Cowboys") then
+			LocalPlayer.Team = Teams.Cowboys;
+		end
+	end});
+
 	local MiscServerSection = Tabs.Miscellaneous:AddSection("Server");
 	local function createServerButton(title, callback)
 		MiscServerSection:AddButton({Title=title,Callback=callback});
