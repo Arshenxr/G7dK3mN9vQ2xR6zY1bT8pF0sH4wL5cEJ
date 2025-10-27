@@ -1,17 +1,11 @@
 local ScriptModule = {};
-ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
-	local Players = game:GetService("Players");
-	local LocalPlayer = Players.LocalPlayer;
+ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager, LocalPlayer)
 	local Workspace = game:GetService("Workspace");
+	local Players = game:GetService("Players");
 	local ReplicatedStorage = game:GetService("ReplicatedStorage");
 	local ContentProvider = game:GetService("ContentProvider");
-	local RunService = game:GetService("RunService");
-	local Teams = game:GetService("Teams");
-	local Lighting = game:GetService("Lighting");
-	if (game.PlaceId ~= 2474168535) then
-		LocalPlayer:Kick("westbound.win - Only Westbound are supported");
-		return;
-	end
+	local Players = game:GetService("Players");
+	local LocalPlayer = Players.LocalPlayer;
 	local Camera = Workspace.CurrentCamera;
 	local startTime = tick();
 	while not Camera do
@@ -23,34 +17,45 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 		end
 	end
 	print("[Westbound.win] 📸 CurrentCamera ready!");
-	print("[Westbound.win] 🕐 Preloading game assets...");
-	local assetsToLoad = {};
-	local function addIfRelevant(obj)
-		if (obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("Sound") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Part") or obj:IsA("Accessory") or obj:IsA("Mesh") or obj:IsA("SpecialMesh") or obj:IsA("ImageLabel") or obj:IsA("ImageButton")) then
-			table.insert(assetsToLoad, obj);
+	do
+		print("[Westbound.win] 🕐 Preloading game assets...");
+		local assetsToLoad = {};
+		local function addIfRelevant(obj)
+			if (obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("Sound") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Part") or obj:IsA("Accessory") or obj:IsA("Mesh") or obj:IsA("SpecialMesh") or obj:IsA("ImageLabel") or obj:IsA("ImageButton")) then
+				table.insert(assetsToLoad, obj);
+			end
 		end
-	end
-	for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-		addIfRelevant(obj);
-	end
-	for _, obj in ipairs(Workspace:GetDescendants()) do
-		addIfRelevant(obj);
-	end
-	if (#assetsToLoad > 0) then
-		local ok, err = pcall(function()
-			ContentProvider:PreloadAsync(assetsToLoad);
-		end);
-		if not ok then
-			warn("[Westbound.win] PreloadAsync failed:", err);
+		for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+			addIfRelevant(obj);
 		end
+		for _, obj in ipairs(Workspace:GetDescendants()) do
+			addIfRelevant(obj);
+		end
+		if (#assetsToLoad > 0) then
+			local ok, err = pcall(function()
+				ContentProvider:PreloadAsync(assetsToLoad);
+			end);
+			if not ok then
+				warn("[Westbound.win] PreloadAsync failed:", err);
+			end
+		end
+		print("[Westbound.win] ✅ Preload finished.");
 	end
-	print("[Westbound.win] ✅ Preload finished.");
 	ScriptModule.Window = Fluent:CreateWindow({Title="Westbound.win",SubTitle="by Arshenxr",TabWidth=160,Size=UDim2.fromOffset(580, 460),Acrylic=true,Theme="Dark",MinimizeKey=Enum.KeyCode.LeftControl});
 	local Window = ScriptModule.Window;
 	ScriptModule.Tabs = {Visuals=Window:AddTab({Title="Visuals",Icon=""}),ModAndAssist=Window:AddTab({Title="Mod&Assist",Icon=""}),Miscellaneous=Window:AddTab({Title="Miscellaneous",Icon=""}),Settings=Window:AddTab({Title="Settings",Icon="settings"})};
 	local Tabs = ScriptModule.Tabs;
 	ScriptModule.FirstRun = true;
 	local MiscFullBrightSection = Tabs.Miscellaneous:AddSection("Full Bright");
+	local MiscTeamSection = Tabs.Miscellaneous:AddSection("Team");
+	local MiscServerSection = Tabs.Miscellaneous:AddSection("Server");
+	local ESPLegendarySection = Tabs.Visuals:AddSection("ESP Legendary Animals");
+	local ModAssistSectionAssist = Tabs.ModAndAssist:AddSection("Assists");
+	local ModAssistSectionMods = Tabs.ModAndAssist:AddSection("Mods");
+	local RunService = game:GetService("RunService");
+	local Camera = workspace.CurrentCamera;
+	local Teams = game:GetService("Teams");
+	local Lighting = game:GetService("Lighting");
 	local FullBrightEnabled = false;
 	local OldLighting = {};
 	local lightingChangedConn;
@@ -93,10 +98,12 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 	end);
 	AmbientPicker:OnChanged(function()
 		if FullBrightEnabled then
-			Lighting.Ambient = AmbientPicker.Value;
+			local color = AmbientPicker.Value;
+			if color then
+				Lighting.Ambient = color;
+			end
 		end
 	end);
-	local ESPLegendarySection = Tabs.Visuals:AddSection("ESP Legendary Animals");
 	local ESPToggle = ESPLegendarySection:AddToggle("ESP_Toggle", {Title="Enable ESP",Default=false});
 	local ESPColorPicker = ESPLegendarySection:AddColorpicker("ESP_Color", {Title="ESP Color",Default=Color3.fromRGB(255, 255, 255)});
 	local ESPSettings = {espEnabled=ESPToggle.Value,espColor=ESPColorPicker.Value};
@@ -141,8 +148,14 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 			return;
 		end
 		local adornee = getAdornee(model);
-		if (not adornee or not Camera) then
+		if not adornee then
 			return;
+		end
+		if not Camera then
+			Camera = Workspace.CurrentCamera;
+			if not Camera then
+				return;
+			end
 		end
 		local billboard = Instance.new("BillboardGui");
 		billboard.Name = "ESP_Billboard";
@@ -194,8 +207,82 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 			createESPForModel(obj);
 		end
 	end);
-	local ModAssistSectionAssist = Tabs.ModAndAssist:AddSection("Assists");
-	local ModAssistSectionMods = Tabs.ModAndAssist:AddSection("Player & Weapon Mods");
+	local function createServerButton(title, callback)
+		MiscServerSection:AddButton({Title=title,Callback=callback});
+	end
+	local function createConfirmDialog(title, action)
+		Window:Dialog({Title=title,Content="Are you sure you want to proceed?",Buttons={{Title="Confirm",Callback=action},{Title="Denied",Callback=function()
+		end}}});
+	end
+	createServerButton("Rejoin Server", function()
+		createConfirmDialog("Rejoin Server", function()
+			game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer);
+		end);
+	end);
+	createServerButton("Hop Server", function()
+		createConfirmDialog("Hop Server", function()
+			local TeleportService = game:GetService("TeleportService");
+			local HttpService = game:GetService("HttpService");
+			local PlaceId, JobId = game.PlaceId, game.JobId;
+			local success, response = pcall(function()
+				return game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Desc&limit=100");
+			end);
+			if not success then
+				return;
+			end
+			local data = HttpService:JSONDecode(response);
+			local bestServer = nil;
+			local highestPlayers = 0;
+			for _, server in ipairs(data.data) do
+				if ((server.id ~= JobId) and (server.playing > highestPlayers) and (server.playing < server.maxPlayers)) then
+					bestServer = server.id;
+					highestPlayers = server.playing;
+				end
+			end
+			if bestServer then
+				TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer);
+			else
+				TeleportService:Teleport(PlaceId, LocalPlayer);
+			end
+		end);
+	end);
+	createServerButton("Hop To SmallServer", function()
+		createConfirmDialog("Hop To SmallServer", function()
+			local TeleportService = game:GetService("TeleportService");
+			local HttpService = game:GetService("HttpService");
+			local PlaceId, JobId = game.PlaceId, game.JobId;
+			local success, response = pcall(function()
+				return game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100");
+			end);
+			if not success then
+				return;
+			end
+			local data = HttpService:JSONDecode(response);
+			local bestServer = nil;
+			local lowestPlayers = math.huge;
+			for _, server in ipairs(data.data) do
+				if ((server.id ~= JobId) and (server.playing < lowestPlayers) and (server.playing < server.maxPlayers)) then
+					bestServer = server.id;
+					lowestPlayers = server.playing;
+				end
+			end
+			if bestServer then
+				TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer);
+			else
+				TeleportService:Teleport(PlaceId, LocalPlayer);
+			end
+		end);
+	end);
+	MiscTeamSection:AddButton({Title="Become Outlaws",Callback=function()
+		if Teams:FindFirstChild("Outlaws") then
+			LocalPlayer.Team = Teams.Outlaws;
+		end
+	end});
+	MiscTeamSection:AddButton({Title="Become Cowboys",Callback=function()
+		if Teams:FindFirstChild("Cowboys") then
+			LocalPlayer.Team = Teams.Cowboys;
+		end
+	end});
 	local AutoHealToggle = ModAssistSectionAssist:AddToggle("AutoHealToggle", {Title="Auto Heal",Default=false});
 	local HealDebounce = false;
 	local PrevHealth = 0;
@@ -203,7 +290,7 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 		getgenv().AutoHeal = value;
 	end);
 	task.spawn(function()
-		while task.wait(0.05) do
+		while task.wait(0.02) do
 			if getgenv().AutoHeal then
 				local Char = LocalPlayer.Character;
 				if Char then
@@ -220,6 +307,7 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 							end
 							task.wait(0.1);
 							HealDebounce = false;
+							PrevHealth = Hum.Health;
 						else
 							PrevHealth = Hum.Health;
 						end
@@ -230,45 +318,31 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 	end);
 	local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle", {Title="Instant Context Action",Default=false});
 	local ICA_Hooked = false;
-	local function hookInstantContextAction()
-		if ICA_Hooked then
-			return;
-		end
-		ICA_Hooked = true;
-		for _, v in pairs(getgc(true)) do
-			if (type(v) == "function") then
-				local info = (pcall(function()
-					return debug.getinfo(v);
-				end) and debug.getinfo(v)) or nil;
-				if (info and (info.name == "ContextHoldFunc")) then
-					local Old;
-					Old = hookfunction(v, function(...)
-						local Arguments = {...};
-						Arguments[#Arguments] = (getgenv().InstantContextAction and 0) or Arguments[#Arguments];
-						return Old(unpack(Arguments));
-					end);
-				end
-			end
-		end
-	end
 	ICA_Toggle:OnChanged(function(value)
 		getgenv().InstantContextAction = value;
-		if value then
-			hookInstantContextAction();
-		end
-	end);
-	LocalPlayer.CharacterAdded:Connect(function()
-		task.wait(1);
-		if getgenv().InstantContextAction then
-			ICA_Hooked = false;
-			hookInstantContextAction();
-			print("[Westbound.win] Re-hooked Instant Context Action after respawn");
+		if not ICA_Hooked then
+			ICA_Hooked = true;
+			for _, v in pairs(getgc(true)) do
+				if (type(v) == "function") then
+					local info = (pcall(function()
+						return getinfo(v);
+					end) and getinfo(v)) or nil;
+					if (info and (info.name == "ContextHoldFunc")) then
+						local Old;
+						Old = hookfunction(v, function(...)
+							local Arguments = {...};
+							Arguments[#Arguments] = (getgenv().InstantContextAction and 0) or Arguments[#Arguments];
+							return Old(unpack(Arguments));
+						end);
+					end
+				end
+			end
 		end
 	end);
 	local GunToggle = ModAssistSectionMods:AddToggle("GunModToggle", {Title="Enable Gun Mods",Default=false});
 	GunToggle:OnChanged(function(value)
 		local success, list = pcall(function()
-			return require(ReplicatedStorage.GunScripts.GunStats);
+			return require(game:GetService("ReplicatedStorage").GunScripts.GunStats);
 		end);
 		if (success and list and value) then
 			for _, v in pairs(list) do
@@ -300,14 +374,17 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
 	SaveManager:SetLibrary(Fluent);
 	InterfaceManager:SetLibrary(Fluent);
 	SaveManager:IgnoreThemeSettings();
-	InterfaceManager:SetFolder("Westbound.Hub");
-	SaveManager:SetFolder("Westbound.Hub/specific-game");
+	InterfaceManager:SetFolder("FluentScriptHub");
+	SaveManager:SetFolder("FluentScriptHub/specific-game");
 	SaveManager:LoadAutoloadConfig();
 	InterfaceManager:BuildInterfaceSection(Tabs.Settings);
 	SaveManager:BuildConfigSection(Tabs.Settings);
 	Window:SelectTab(1);
-	if ScriptModule.FirstRun then
-		Fluent:Notify({Title="Westbound.win",Content="Successfully Loaded!",Duration=5});
+	if FirstRun then
+		Fluent:Notify({Title="Westbound.win",Content="Success Fully Load!",Duration=5});
 	end
+	ScriptModule.Window = Window;
+	ScriptModule.Tabs = Tabs;
+	ScriptModule.FirstRun = true;
 end;
 return ScriptModule;
