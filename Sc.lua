@@ -265,6 +265,10 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager)
         end
     end)
 
+	local TeamSection = Tabs.Misc:AddSection("Team")
+	TeamSection:AddButton({ Title = "Become Outlaws", Callback = function() if Teams:FindFirstChild("Outlaws") then LocalPlayer.Team = Teams.Outlaws end end })
+	TeamSection:AddButton({ Title = "Become Cowboys", Callback = function() if Teams:FindFirstChild("Cowboys") then LocalPlayer.Team = Teams.Cowboys end end })
+	
     -- Instant Context Action
     local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle", {
         Title = "Instant Context Action",
