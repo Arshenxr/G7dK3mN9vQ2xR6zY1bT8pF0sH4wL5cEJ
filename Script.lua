@@ -198,6 +198,17 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager, LocalPlayer)
 		Window:Dialog({Title=title,Content="Are you sure you want to proceed?",Buttons={{Title="Confirm",Callback=action},{Title="Denied",Callback=function()
 		end}}});
 	end
+	local MiscTeamSection = Tabs.Miscellaneous:AddSection("Team");
+	MiscTeamSection:AddButton({Title="Become Outlaws",Callback=function()
+		if Teams:FindFirstChild("Outlaws") then
+			LocalPlayer.Team = Teams.Outlaws;
+		end
+	end});
+	MiscTeamSection:AddButton({Title="Become Cowboys",Callback=function()
+		if Teams:FindFirstChild("Cowboys") then
+			LocalPlayer.Team = Teams.Cowboys;
+		end
+	end});
 	createServerButton("Rejoin Server", function()
 		createConfirmDialog("Rejoin Server", function()
 			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer);
@@ -249,17 +260,6 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager, LocalPlayer)
 			end
 		end);
 	end);
-	local MiscTeamSection = Tabs.Miscellaneous:AddSection("Team");
-	MiscTeamSection:AddButton({Title="Become Outlaws",Callback=function()
-		if Teams:FindFirstChild("Outlaws") then
-			LocalPlayer.Team = Teams.Outlaws;
-		end
-	end});
-	MiscTeamSection:AddButton({Title="Become Cowboys",Callback=function()
-		if Teams:FindFirstChild("Cowboys") then
-			LocalPlayer.Team = Teams.Cowboys;
-		end
-	end});
 	local ModAssistSectionAssist = Tabs.ModAndAssist:AddSection("Assists");
 	local AutoHealToggle = ModAssistSectionAssist:AddToggle("AutoHealToggle", {Title="Auto Heal",Default=false});
 	local HealDebounce = false;
