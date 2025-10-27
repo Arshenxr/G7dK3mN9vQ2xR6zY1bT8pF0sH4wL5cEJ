@@ -190,10 +190,6 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager, LocalPlayer)
 			createESPForModel(obj);
 		end
 	end);
-	local MiscServerSection = Tabs.Miscellaneous:AddSection("Server");
-	local function createServerButton(title, callback)
-		MiscServerSection:AddButton({Title=title,Callback=callback});
-	end
 	local function createConfirmDialog(title, action)
 		Window:Dialog({Title=title,Content="Are you sure you want to proceed?",Buttons={{Title="Confirm",Callback=action},{Title="Denied",Callback=function()
 		end}}});
@@ -209,6 +205,10 @@ ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager, LocalPlayer)
 			LocalPlayer.Team = Teams.Cowboys;
 		end
 	end});
+	local MiscServerSection = Tabs.Miscellaneous:AddSection("Server");
+	local function createServerButton(title, callback)
+		MiscServerSection:AddButton({Title=title,Callback=callback});
+	end
 	createServerButton("Rejoin Server", function()
 		createConfirmDialog("Rejoin Server", function()
 			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer);
