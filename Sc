@@ -1,377 +1,1371 @@
-local ScriptModule = {};
-ScriptModule.Init = function(Fluent, SaveManager, InterfaceManager, LocalPlayer)
-	local Workspace = game:GetService("Workspace");
-	local Players = game:GetService("Players");
-	local ReplicatedStorage = game:GetService("ReplicatedStorage");
-	local ContentProvider = game:GetService("ContentProvider");
-	local RunService = game:GetService("RunService");
-	local Teams = game:GetService("Teams");
-	local Lighting = game:GetService("Lighting");
-	local TeleportService = game:GetService("TeleportService");
-	local HttpService = game:GetService("HttpService");
-	LocalPlayer = LocalPlayer or Players.LocalPlayer;
-	local Camera = Workspace.CurrentCamera;
-	local startTime = tick();
-	while not Camera do
-		task.wait(0.1);
-		Camera = Workspace.CurrentCamera;
-		if ((tick() - startTime) > 5) then
-			warn("[Westbound.win] CurrentCamera not found!");
-			return;
-		end
-	end
-	print("[Westbound.win] 📸 CurrentCamera ready!");
-	local function preloadAssets()
-		print("[Westbound.win] 🕐 Preloading game assets...");
-		local assetsToLoad = {};
-		local function addIfRelevant(obj)
-			if (obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("Sound") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Part") or obj:IsA("Accessory") or obj:IsA("Mesh") or obj:IsA("SpecialMesh") or obj:IsA("ImageLabel") or obj:IsA("ImageButton")) then
-				table.insert(assetsToLoad, obj);
-			end
-		end
-		for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-			addIfRelevant(obj);
-		end
-		for _, obj in ipairs(Workspace:GetDescendants()) do
-			addIfRelevant(obj);
-		end
-		if (#assetsToLoad > 0) then
-			local ok, err = pcall(function()
-				ContentProvider:PreloadAsync(assetsToLoad);
-			end);
-			if not ok then
-				warn("[Westbound.win] PreloadAsync failed:", err);
-			end
-		end
-		print("[Westbound.win] ✅ Preload finished.");
-	end
-	preloadAssets();
-	ScriptModule.Window = Fluent:CreateWindow({Title="Westbound.win",SubTitle="by Arshenxr",TabWidth=160,Size=UDim2.fromOffset(580, 460),Acrylic=true,Theme="Dark",MinimizeKey=Enum.KeyCode.LeftControl});
-	local Window = ScriptModule.Window;
-	local Tabs = {Visuals=Window:AddTab({Title="Visuals",Icon=""}),ModAndAssist=Window:AddTab({Title="Mod&Assist",Icon=""}),Miscellaneous=Window:AddTab({Title="Miscellaneous",Icon=""}),Settings=Window:AddTab({Title="Settings",Icon="settings"})};
-	ScriptModule.Tabs = Tabs;
-	ScriptModule.FirstRun = true;
-	local MiscFullBrightSection = Tabs.Miscellaneous:AddSection("Full Bright");
-	local FullBrightToggle = MiscFullBrightSection:AddToggle("FullBrightToggle", {Title="Full Bright",Default=false});
-	local AmbientPicker = MiscFullBrightSection:AddColorpicker("AmbientColor", {Title="Ambient Color",Default=Color3.fromRGB(255, 255, 255)});
-	local FullBrightEnabled = false;
-	local OldLighting = {};
-	local lightingChangedConn;
-	local function applyFullBright()
-		Lighting.Brightness = 2;
-		Lighting.ClockTime = 14;
-		Lighting.FogEnd = 100000;
-		Lighting.GlobalShadows = false;
-		if FullBrightEnabled then
-			Lighting.Ambient = AmbientPicker.Value or Color3.fromRGB(255, 255, 255);
-		end
-	end
-	FullBrightToggle:OnChanged(function(enabled)
-		FullBrightEnabled = enabled;
-		if enabled then
-			OldLighting = {Brightness=Lighting.Brightness,ClockTime=Lighting.ClockTime,FogEnd=Lighting.FogEnd,GlobalShadows=Lighting.GlobalShadows,Ambient=Lighting.Ambient};
-			applyFullBright();
-			if lightingChangedConn then
-				lightingChangedConn:Disconnect();
-			end
-			lightingChangedConn = Lighting.Changed:Connect(function(prop)
-				if (FullBrightEnabled and ((prop == "Brightness") or (prop == "ClockTime") or (prop == "FogEnd") or (prop == "GlobalShadows") or (prop == "Ambient"))) then
-					applyFullBright();
-				end
-			end);
-		else
-			if lightingChangedConn then
-				lightingChangedConn:Disconnect();
-			end
-			for k, v in pairs(OldLighting) do
-				pcall(function()
-					Lighting[k] = v;
-				end);
-			end
-		end
-	end);
-	AmbientPicker:OnChanged(function()
-		if (FullBrightEnabled and AmbientPicker.Value) then
-			Lighting.Ambient = AmbientPicker.Value;
-		end
-	end);
-	local ESPLegendarySection = Tabs.Visuals:AddSection("ESP Legendary Animals");
-	local ESPToggle = ESPLegendarySection:AddToggle("ESP_Toggle", {Title="Enable ESP",Default=false});
-	local ESPColorPicker = ESPLegendarySection:AddColorpicker("ESP_Color", {Title="ESP Color",Default=Color3.fromRGB(255, 255, 255)});
-	local ESPSettings = {espEnabled=ESPToggle.Value,espColor=ESPColorPicker.Value};
-	local espCache = {};
-	local targetNames = {"legendarydirewolf","legendarybison","legendarygrizzlybear","legendaryblackbear","legendarywolf","legendarymoosebull","direwolf"};
-	local customNames = {legendarydirewolf={name="Legendary Direwolf"},legendarybison={name="Legendary Bison"},legendarygrizzlybear={name="Legendary Grizzly Bear"},legendaryblackbear={name="Legendary Black Bear"},legendarywolf={name="Legendary Wolf"},legendarymoosebull={name="Legendary Moose Bull"},direwolf={name="Direwolf"}};
-	local customNamesOrdered = {"legendarydirewolf","legendarybison","legendarygrizzlybear","legendaryblackbear","legendarywolf","legendarymoosebull","direwolf"};
-	local function getCustomName(model)
-		local nameLower = model.Name:lower();
-		for _, key in ipairs(customNamesOrdered) do
-			local value = customNames[key];
-			if (value and nameLower:find(key)) then
-				return value.name;
-			end
-		end
-		return model.Name;
-	end
-	local function isTargetModel(model)
-		if not model then
-			return false;
-		end
-		local nameLower = model.Name:lower();
-		for _, t in ipairs(targetNames) do
-			if nameLower:find(t) then
-				return true;
-			end
-		end
-		return false;
-	end
-	local function getAdornee(model)
-		return model:FindFirstChild("Head") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart");
-	end
-	local function createESPForModel(model)
-		if espCache[model] then
-			return;
-		end
-		local adornee = getAdornee(model);
-		if (not adornee or not Camera) then
-			return;
-		end
-		local billboard = Instance.new("BillboardGui");
-		billboard.Name = "ESP_Billboard";
-		billboard.Adornee = adornee;
-		billboard.Size = UDim2.new(0, 150, 0, 40);
-		billboard.StudsOffset = Vector3.new(0, 2.5, 0);
-		billboard.AlwaysOnTop = true;
-		billboard.ResetOnSpawn = false;
-		billboard.Enabled = ESPSettings.espEnabled;
-		local label = Instance.new("TextLabel");
-		label.Size = UDim2.new(1, 0, 1, 0);
-		label.BackgroundTransparency = 1;
-		label.Text = getCustomName(model);
-		label.TextColor3 = ESPSettings.espColor;
-		label.TextStrokeTransparency = 0.5;
-		label.TextSize = 18;
-		label.Font = Enum.Font.SourceSansBold;
-		label.Parent = billboard;
-		billboard.Parent = Camera;
-		espCache[model] = {billboard=billboard,label=label,adornee=adornee};
-	end
-	local function updateAllESP()
-		for model, data in pairs(espCache) do
-			if (not model or not model.Parent) then
-				data.billboard:Destroy();
-				espCache[model] = nil;
-			else
-				data.billboard.Enabled = ESPSettings.espEnabled;
-				data.label.Text = getCustomName(model);
-				data.label.TextColor3 = ESPSettings.espColor;
-			end
-		end
-	end
-	local function createAllESP()
-		for _, obj in ipairs(Workspace:GetDescendants()) do
-			if (obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") and isTargetModel(obj)) then
-				createESPForModel(obj);
-			end
-		end
-	end
-	ESPToggle:OnChanged(function(value)
-		ESPSettings.espEnabled = value;
-	end);
-	ESPColorPicker:OnChanged(function(color)
-		ESPSettings.espColor = color;
-	end);
-	createAllESP();
-	RunService.RenderStepped:Connect(function()
-		updateAllESP();
-	end);
-	Workspace.DescendantAdded:Connect(function(obj)
-		if (obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") and isTargetModel(obj)) then
-			createESPForModel(obj);
-		end
-	end);
+---@diagnostic disable: need-check-nil
+local assert = assert
+assert(game.PlaceId == 2474168535, "[westbound.pro] - The game you executed the script on is not Westbound!")
+repeat task.wait(0) until game:IsLoaded()
 
-	local MiscTeamSection = Tabs.Miscellaneous:AddSection("Team");
-	MiscTeamSection:AddButton({Title="Become Outlaws",Callback=function()
-		if Teams:FindFirstChild("Outlaws") then
-			LocalPlayer.Team = Teams.Outlaws;
-		end
-	end});
-	MiscTeamSection:AddButton({Title="Become Cowboys",Callback=function()
-		if Teams:FindFirstChild("Cowboys") then
-			LocalPlayer.Team = Teams.Cowboys;
-		end
-	end});
-	local function createConfirmDialog(title, action)
-		Window:Dialog({Title=title,Content="Are you sure you want to proceed?",Buttons={{Title="Confirm",Callback=action},{Title="Denied",Callback=function()
-		end}}});
-	end
-	local MiscServerSection = Tabs.Miscellaneous:AddSection("Server");
-	local function createServerButton(title, callback)
-		MiscServerSection:AddButton({Title=title,Callback=callback});
-	end
-	createServerButton("Rejoin Server", function()
-		createConfirmDialog("Rejoin Server", function()
-			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer);
-		end);
-	end);
-	createServerButton("Hop Server", function()
-		createConfirmDialog("Hop Server", function()
-			local PlaceId, JobId = game.PlaceId, game.JobId;
-			local success, response = pcall(function()
-				return game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Desc&limit=100");
-			end);
-			if success then
-				local data = HttpService:JSONDecode(response);
-				local bestServer, highestPlayers = nil, 0;
-				for _, server in ipairs(data.data) do
-					if ((server.id ~= JobId) and (server.playing > highestPlayers) and (server.playing < server.maxPlayers)) then
-						bestServer = server.id;
-						highestPlayers = server.playing;
-					end
-				end
-				if bestServer then
-					TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer);
-				else
-					TeleportService:Teleport(PlaceId, LocalPlayer);
-				end
-			end
-		end);
-	end);
-	createServerButton("Hop To SmallServer", function()
-		createConfirmDialog("Hop To SmallServer", function()
-			local PlaceId, JobId = game.PlaceId, game.JobId;
-			local success, response = pcall(function()
-				return game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100");
-			end);
-			if success then
-				local data = HttpService:JSONDecode(response);
-				local bestServer, lowestPlayers = nil, math.huge;
-				for _, server in ipairs(data.data) do
-					if ((server.id ~= JobId) and (server.playing < lowestPlayers) and (server.playing < server.maxPlayers)) then
-						bestServer = server.id;
-						lowestPlayers = server.playing;
-					end
-				end
-				if bestServer then
-					TeleportService:TeleportToPlaceInstance(PlaceId, bestServer, LocalPlayer);
-				else
-					TeleportService:Teleport(PlaceId, LocalPlayer);
-				end
-			end
-		end);
-	end);
-	local ModAssistSectionAssist = Tabs.ModAndAssist:AddSection("Assists");
-	local AutoHealToggle = ModAssistSectionAssist:AddToggle("AutoHealToggle", {Title="Auto Heal",Default=false});
-	local HealDebounce = false;
-	local PrevHealth = 0;
-	AutoHealToggle:OnChanged(function(value)
-		getgenv().AutoHeal = value;
-	end);
-	task.spawn(function()
-		while task.wait(0.1) do
-			if getgenv().AutoHeal then
-				local Char = LocalPlayer.Character;
-				if Char then
-					local Hum = Char:FindFirstChildOfClass("Humanoid");
-					if (Hum and (Hum.Health < 30) and (Hum.Health < PrevHealth) and not HealDebounce) then
-						HealDebounce = true;
-						PrevHealth = Hum.Health;
-						local Potion = LocalPlayer.Backpack:FindFirstChild("Health Potion") or Char:FindFirstChild("Health Potion");
-						if (Potion and Potion:FindFirstChild("DrinkPotion")) then
-							pcall(function()
-								Potion.DrinkPotion:InvokeServer();
-							end);
-						end
-						task.wait(0.1);
-						HealDebounce = false;
-						PrevHealth = Hum.Health;
-					else
-						PrevHealth = Hum.Health;
-					end
-				end
-			end
-		end
-	end);
-local ICA_Toggle = ModAssistSectionAssist:AddToggle("InstantContextActionToggle", {Title="Instant Context Action", Default=false})
-local ICA_Hooked = false
+local getgenv, getgc, hookmetamethod, hookfunction, newcclosure, setfpscap, getconnections, getconstant, getconstants, setconstant, getinfo, isfile, printconsole =
+	getgenv, getgc, hookmetamethod, hookfunction, newcclosure, setfpscap, getconnections,
+	---@diagnostic disable-next-line: undefined-field
+	debug.getconstant, debug.getconstants, debug.setconstant, debug.getinfo, isfile, printconsole or function() end
 
-local function hookInstantContextAction()
-    if ICA_Hooked then return end
-    ICA_Hooked = true
-    for _, v in pairs(getgc(true)) do
-        if type(v) == "function" then
-            local ok, info = pcall(function() return debug.getinfo(v) end)
-            info = ok and info or nil
-            if info and info.name == "ContextHoldFunc" then
-                local Old
-                Old = hookfunction(v, function(...)
-                    local args = {...}
-                    args[#args] = getgenv().InstantContextAction and 0 or args[#args]
-                    return Old(unpack(args))
-                end)
-            end
-        end
-    end
+local getfenv, require, rawget, rawset, loadstring, select, next, unpack, tick, tostring, type, typeof, delay, wait =
+---@diagnostic disable-next-line: deprecated
+	getfenv, require, rawget, rawset, loadstring, select, next, table.unpack, tick, tostring, type, typeof, task.delay
+
+local stringgsub, stringfind, stringsub, stringformat = string.gsub, string.find, string.sub, string.format
+local mathrandom = math.random
+local tablefind = table.find
+local coroutinewrap = coroutine.wrap
+local Instancenew, Color3fromRGB, Vector3new, Vector3zero, Vector2new, CFramenew, TweenInfonew, GetService =
+	Instance.new, Color3.fromRGB, Vector3.new, Vector3.zero, Vector2.new, CFrame.new, TweenInfo.new, function(...)
+		return game.GetService(game, ...)
+	end
+
+local UserInputService, TeleportService, HttpService, TweenService, RunService, ReplicatedStorage, StarterGui, VirtualUser, Players, Lighting, Teams =
+	GetService("UserInputService"), GetService("TeleportService"), GetService("HttpService"), GetService("TweenService"),
+	GetService("RunService"), GetService("ReplicatedStorage"), GetService("StarterGui"), GetService("VirtualUser"),
+	GetService("Players"), GetService("Lighting"), GetService("Teams")
+
+local Camera, LocalPlayer = workspace.CurrentCamera, Players.LocalPlayer
+
+wait = function() return RunService.RenderStepped.Wait(RunService.RenderStepped) end
+WorldToViewportPoint = function(...) return Camera.WorldToViewportPoint(Camera, ...) end
+GetPartsObscuringTarget = function(...) return Camera.GetPartsObscuringTarget(Camera, ...) end
+GetMouseLocation = function() return UserInputService:GetMouseLocation() end
+
+FindFirstChild = function(self, ...) return self.FindFirstChild(self, ...) end
+FindFirstChildOfClass = function(self, ...) return self.FindFirstChildOfClass(self, ...) end
+WaitForChild = function(self, ...) return self.WaitForChild(self, ...) end
+GetChildren = function(self, ...) return self.GetChildren(self, ...) end
+GetDescendants = function(self, ...) return self.GetDescendants(self, ...) end
+GetPlayers = function() return Players:GetPlayers() end
+GetPlayerFromCharacter = function(...) return Players:GetPlayerFromCharacter(...) end
+HttpGet = function(...) return game.HttpGet(game, ...) end
+
+if getgenv().AirTeam_westboundpro then return end
+
+getgenv().AirTeam_westboundpro = {
+	Version = "V1.6.6",
+	Settings = {
+		SilentAim = { Enabled = false, WallCheck = false, HitChance = 100 },
+		Triggerbot = { Enabled = false, Delay = 0 },
+		Character = {
+			NoFallDamage = false, NoJumpCooldown = false, AutoHeal = false, InstantContextAction = false, InfiniteGallopStamina = false,
+		},
+		GunMods = {
+			ModAll = false,
+		},
+		FOV = { Enabled = false, Amount = 90 },
+		Miscellaneous = {
+			FullBright = false,
+			AmbientColor = Color3fromRGB(255, 255, 255),
+			AntiAFK = false,
+			OptimizeUponUnfocus = false,
+			Fly = false,
+			FlyKeybind = Enum.KeyCode.F,
+			FlySpeed = 1,
+		},
+		HitPart = "Head",
+		ToggleKeybind = Enum.KeyCode.RightShift,
+	},
+	Aimbot = {
+		Settings = {
+			Enabled = false,
+			WallCheck = false,
+			Sensitivity = 0,
+			ThirdPerson = false,
+			ThirdPersonSensitivity = 3,
+			TriggerKey = "MouseButton2",
+			Toggle = false
+		},
+		FOVSettings = {
+			Color = Color3fromRGB(255, 255, 255),
+			LockedColor = Color3fromRGB(255, 70, 70),
+			Transparency = 0.5,
+			Sides = 60,
+			Thickness = 1,
+			Filled = false
+		}
+	},
+	WallHack = {
+		Settings = { Enabled = false, TeamCheck = false, AliveCheck = true, Animals = false },
+		Visuals = {
+			ESPSettings = {
+				Enabled = true,
+				TextColor = Color3fromRGB(255, 255, 255),
+				TextSize = 14,
+				Outline = true,
+				OutlineColor = Color3fromRGB(0, 0, 0),
+				TextTransparency = 0.7,
+				TextFont = Drawing.Fonts.UI,
+				DisplayDistance = true,
+				DisplayHealth = true,
+				DisplayName = true
+			},
+			TracersSettings = {
+				Enabled = true, Type = 1, Transparency = 0.7, Thickness = 1, Color = Color3fromRGB(255, 255, 255)
+			},
+			BoxSettings = {
+				Enabled = true,
+				Type = 1,
+				Color = Color3fromRGB(255, 255, 255),
+				Transparency = 0.7,
+				Thickness = 1,
+				Filled = false,
+				Increase = 1
+			},
+			HeadDotSettings = {
+				Enabled = true,
+				Color = Color3fromRGB(255, 255, 255),
+				Transparency = 0.5,
+				Thickness = 1,
+				Filled = true,
+				Sides = 30
+			}
+		},
+		Crosshair = {
+			Settings = {
+				Enabled = false,
+				Type = 1,
+				Size = 12,
+				Thickness = 1,
+				Color = Color3fromRGB(0, 255, 0),
+				Transparency = 1,
+				GapSize = 5,
+				CenterDot = false,
+				CenterDotColor = Color3fromRGB(0, 255, 0),
+				CenterDotSize = 1,
+				CenterDotTransparency = 1,
+				CenterDotFilled = true,
+				CenterDotThickness = 1
+			}
+		}
+	}
+}
+
+local CharacterValues, LocationsVectors, FullBrightValues, OldLightingValues, Teleporting, Flying, NoClipping, Farming, Typing, Debounce, HealDebounce, Version, PrevHealth =
+	{ WalkSpeed = 13, JumpPower = 45 },
+	{
+		Tumbleweed = Vector3new(-386, 12, -83),
+		StoneCreek = Vector3new(951, 21, 206),
+		Grayridge = Vector3new(1519, 120, 1591),
+		RustRidgeQuarry = Vector3new(-1659, -28, 1639),
+		FortArthur = Vector3new(-65, 72, 1267),
+		FortCassidy_SAFE = Vector3new(-1239, 160, -571),
+		RedRocksCamp_SAFE = Vector3new(1862, 104, -1827)
+	},
+	{}, {}, false, false, false, false, false, false, false, "V1.6.6", 100
+
+local Parts = { "Random", "Head", "HumanoidRootPart", "LeftHand", "RightHand", "LeftLowerArm", "RightLowerArm",
+	"LeftUpperArm", "RightUpperArm", "LeftFoot", "LeftLowerLeg", "UpperTorso", "LeftUpperLeg", "RightFoot",
+	"RightLowerLeg", "LowerTorso", "RightUpperLeg" }
+local Fonts = { "UI", "System", "Plex", "Monospace" }
+local TracersType = { "Bottom", "Center", "Mouse" }
+
+local Mouse = LocalPlayer:GetMouse()
+local RagdollScript = require(ReplicatedStorage.SharedModules.Ragdoll)
+local GeneralEvents = ReplicatedStorage.GeneralEvents
+local RagdollFunction = RagdollScript.EnableRagdoll
+
+if not LocalPlayer.Character then
+	StarterGui:SetCore("SendNotification", {
+		Title = "westbound.pro",
+		Text = "Waiting for character to load...",
+		Duration = 1 / 0,
+		Icon = "rbxassetid://6238537240",
+		Button1 = "OK"
+	})
 end
 
-ICA_Toggle:OnChanged(function(value)
-    getgenv().InstantContextAction = value
-    hookInstantContextAction()
+repeat wait() until LocalPlayer.Character and FindFirstChildOfClass(LocalPlayer.Character, "Humanoid")
+
+local Tick = tick()
+
+local ConfigLibrary = loadstring(HttpGet("https://raw.githubusercontent.com/Exunys/Config-Library/main/Main.lua"))()
+loadstring(HttpGet("https://raw.githubusercontent.com/Exunys/westbound.pro-Utilites/main/Aimbot.lua"))()
+loadstring(HttpGet("https://raw.githubusercontent.com/Exunys/westbound.pro-Utilites/main/WallHack.lua"))()
+
+printconsole(stringformat("[westbound.pro %s] - Fetching script configuration...", Version), 100, 100, 200)
+
+if not isfile("AirTeam/westbound.pro/Config.json") then
+	printconsole(stringformat("[westbound.pro %s] - Failed to find the configuration! Creating a new one...", Version),
+		200, 50, 50)
+	ConfigLibrary:SaveConfig("AirTeam/westbound.pro/Config.json", getgenv().AirTeam_westboundpro)
+end
+
+local Config = ConfigLibrary:LoadConfig("AirTeam/westbound.pro/Config.json")
+
+if Config.Version and Config.Version == Version then
+	getgenv().AirTeam_westboundpro = Config
+	printconsole(stringformat("[westbound.pro %s] - Loaded configuration!", Version), 100, 200, 100)
+else
+	printconsole(
+	---@diagnostic disable-next-line: redundant-parameter
+		stringformat(
+			"[westbound.pro %s] - Configuration version (%s) outdated! Deleting and creating a new configuration...",
+			Version,
+			Config.Version or "N/A"), 0, 200, 200)
+	delfile("AirTeam/westbound.pro/Config.json")
+	ConfigLibrary:SaveConfig("AirTeam/westbound.pro/Config.json", getgenv().AirTeam_westboundpro)
+end
+
+local Settings, Aimbot, WallHack, OldNamecall, OldNewIndex, OldIndex = getgenv().AirTeam_westboundpro.Settings,
+	getgenv().AirTeam_westboundpro.Aimbot, getgenv().AirTeam_westboundpro.WallHack
+
+FullBrightValues = {
+	FogColor = Settings.Miscellaneous.AmbientColor,
+	FogEnd = 1 / 0,
+	FogStart = 1 / 0,
+	Ambient = Settings.Miscellaneous.AmbientColor,
+	Brightness = 5,
+	ColorShift_Bottom = Settings.Miscellaneous.AmbientColor,
+	ColorShift_Top = Settings.Miscellaneous.AmbientColor,
+	OutdoorAmbient = Settings.Miscellaneous.AmbientColor,
+	Outlines = true
+}
+
+local CoreFunctions = {
+	GetClosestPlayer = function()
+		local HitPart = Settings.HitPart == "Random" and Parts[mathrandom(2, #Parts)] or Settings.HitPart
+		local RequiredDistance = Settings.FOV.Enabled and Settings.FOV.Amount or 2000
+		local Target
+
+		for _, v in next, GetPlayers() do
+			if v ~= LocalPlayer and v.Character and FindFirstChild(v.Character, Settings.HitPart) and FindFirstChildOfClass(v.Character, "Humanoid") then
+				if FindFirstChildOfClass(v.Character, "ForceField") then end
+				if FindFirstChildOfClass(v.Character, "Humanoid").Health <= 0 then end
+				if LocalPlayer.Team == Teams.Cowboys and v.TeamColor == LocalPlayer.TeamColor then end
+				if Settings.SilentAim.WallCheck and #(GetPartsObscuringTarget({ v.Character[HitPart].Position }, GetDescendants(v.Character))) > 0 then end
+
+				local Vector, OnScreen = WorldToViewportPoint(v.Character[HitPart].Position); Vector = Vector2new(
+					Vector.X, Vector.Y)
+				local Distance = (GetMouseLocation() - Vector).Magnitude
+
+				if Distance < RequiredDistance and OnScreen then
+					RequiredDistance = Distance
+					Target = v
+				end
+			end
+		end
+
+		return Target
+	end,
+
+	GetClosestCashRegister = function()
+		local RequiredDistance, Target = 10
+
+		for _, v in next, GetChildren(workspace) do
+			if v.ClassName == "Model" and v.Name == "CashRegister" then
+				local Distance = (LocalPlayer.Character.PrimaryPart.Position - v.Union.Position).Magnitude
+				Target = Distance < RequiredDistance and v or Target
+				RequiredDistance = Distance < RequiredDistance and Distance or RequiredDistance
+			end
+		end
+
+		return Target
+	end,
+
+	Teleport = function(Location, AutoFarm)
+		if Teleporting then return end
+		local PrimaryPart = LocalPlayer.Character.PrimaryPart; Teleporting = true
+		repeat wait() until PrimaryPart.Position
+		local Animation = TweenService:Create(PrimaryPart,
+			TweenInfonew((PrimaryPart.Position - Location).Magnitude / 150, Enum.EasingStyle.Linear,
+				Enum.EasingDirection.Out), { CFrame = CFramenew(Location) })
+		Animation:Play()
+		Animation.Completed:Connect(function()
+			Teleporting = false; wait(); return true
+		end)
+	end,
+
+	SeparateUpper = function(Value)
+		return stringgsub(Value, "(%l)(%u)", function(...) return select(1, ...) .. " " .. select(2, ...) end)
+	end
+}
+
+local Functions = {
+	ModGuns = function()
+		for _, v in next, getgc(true) do
+			if type(v) == "table" and rawget(v, "Shots") then
+				if Settings.GunMods.ModAll then
+					rawset(v.GunStats, "prepTime", 0)
+					rawset(v.GunStats, "equipTime", 0.1)
+					rawset(v.GunStats, "ReloadSpeed", 0)
+					rawset(v.GunStats, "Spread", 0)
+					rawset(v.GunStats, "HipFireAccuracy", 0)
+					rawset(v.GunStats, "ZoomAccuracy", 0)
+					rawset(v.GunStats, "BulletSpeed", math.huge)
+					rawset(v.GunStats, "MaxShots", math.huge)
+					rawset(v.GunStats, "camShakeResist", 0)
+					rawset(v.GunStats, "AutoFire", true)
+				end
+			end
+		end
+	end,
+
+	ChangeWalkSpeed = function(Value)
+		for _, v in next, getgc(true) do
+			if type(v) == "table" then
+				if rawget(v, "GunOutRunSpeed") then
+					if Value == 13 then
+						rawset(v, "RunSpeed", 30)
+						rawset(v, "GunOutRunSpeed", 26)
+						rawset(v, "WalkSpeed", 13)
+						rawset(v, "ZoomSpeed", 13)
+					else
+						rawset(v, "RunSpeed", Value * 2.3)
+						rawset(v, "GunOutRunSpeed", Value * 2)
+						rawset(v, "WalkSpeed", Value)
+						rawset(v, "ZoomSpeed", Value)
+					end
+				end
+			end
+		end
+
+		CharacterValues.WalkSpeed = Value
+		LocalPlayer.Character.Humanoid.WalkSpeed = Value
+	end,
+
+	ChangeJumpPower = function(Value)
+		CharacterValues.JumpPower = Value
+		LocalPlayer.Character.Humanoid.JumpPower = Value
+	end,
+
+	Respawn = function()
+		GeneralEvents.Spawn:FireServer(nil, LocalPlayer.Team == Teams.Outlaws)
+	end,
+
+	RagdollCallback = function(Value)
+		Settings.Character.AntiRagdoll = Value and Value or Settings.Character.AntiRagdoll
+
+		if Settings.Character.AntiRagdoll or Farming then
+			hookfunction(RagdollScript.EnableRagdoll, function() end)
+		else
+			hookfunction(RagdollScript.EnableRagdoll, RagdollFunction)
+		end
+	end,
+
+	EditJumpingStamina = function()
+		repeat wait() until FindFirstChildOfClass(LocalPlayer.Character, "Humanoid")
+
+		for _, v in next, getconnections(LocalPlayer.Character.Humanoid.Jumping) do
+			if #getconstants(v.Function) == 15 and (getconstant(v.Function, 8) == 1.4 or getconstant(v.Function, 8) == 0.1) then
+				setconstant(v.Function, 8,
+					(Settings.Character.NoJumpCooldown or CharacterValues.JumpPower > 45) and 0.1 or 1.4)
+			end
+		end
+	end,
+
+	Fly = function()
+		if not Settings.Miscellaneous.Fly then return end
+
+		repeat wait() until LocalPlayer.Character and FindFirstChild(LocalPlayer.Character, "HumanoidRootPart") and FindFirstChildOfClass(LocalPlayer.Character, "Humanoid")
+
+		local Control, LocalControl, Speed = { F = 0, B = 0, L = 0, R = 0 }, { F = 0, B = 0, L = 0, R = 0 }, 0
+		local BG, BV = Instancenew("BodyGyro", LocalPlayer.Character.HumanoidRootPart),
+			Instancenew("BodyVelocity", LocalPlayer.Character.HumanoidRootPart)
+
+		BG.P = 9e4
+		BG.MaxTorque = Vector3new(9e9, 9e9, 9e9)
+		BG.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+
+		BV.Velocity = Vector3new(0, 0.1, 0)
+		BV.MaxForce = Vector3new(9e9, 9e9, 9e9)
+
+		coroutinewrap(function()
+			repeat
+				wait(); LocalPlayer.Character.Humanoid.PlatformStand = true
+
+				if Control.L + Control.R ~= 0 or Control.F + Control.B ~= 0 then
+					Speed = 50
+				elseif not (Control.L + Control.R ~= 0 or Control.F + Control.B ~= 0) and Speed ~= 0 then
+					Speed = 0
+				end
+
+				if (Control.L + Control.R) ~= 0 or (Control.F + Control.B) ~= 0 then
+					BV.Velocity = ((Camera.CFrame.LookVector * (Control.F + Control.B)) + ((Camera.CFrame * CFramenew(Control.L + Control.R, (Control.F + Control.B) * 0.2, 0).p) - Camera.CFrame.Position)) *
+						Speed
+					LocalControl = { F = Control.F, B = Control.B, L = Control.L, R = Control.R }
+				elseif (Control.L + Control.R) == 0 and (Control.F + Control.B) == 0 and Speed ~= 0 then
+					BV.Velocity = ((Camera.CFrame.LookVector * (LocalControl.F + LocalControl.B)) + ((Camera.CFrame * CFramenew(LocalControl.L + LocalControl.R, (LocalControl.F + LocalControl.B) * 0.2, 0).p) - Camera.CFrame.Position)) *
+						Speed
+				else
+					BV.Velocity = Vector3new(0, 0.1, 0)
+				end
+
+				BG.CFrame = Camera.CFrame
+			until not Flying
+
+			Control, LocalControl, Speed = { F = 0, B = 0, L = 0, R = 0 }, { F = 0, B = 0, L = 0, R = 0 }, 0
+
+			BG:Destroy()
+			BV:Destroy()
+
+			LocalPlayer.Character.Humanoid.PlatformStand = false
+		end)()
+
+		UserInputService.InputBegan:Connect(function(Input)
+			if not Typing then
+				if Input.KeyCode == Enum.KeyCode.W then
+					Control.F = Settings.Miscellaneous.FlySpeed
+				elseif Input.KeyCode == Enum.KeyCode.S then
+					Control.B = -Settings.Miscellaneous.FlySpeed
+				elseif Input.KeyCode == Enum.KeyCode.A then
+					Control.L = -Settings.Miscellaneous.FlySpeed
+				elseif Input.KeyCode == Enum.KeyCode.D then
+					Control.R = Settings.Miscellaneous.FlySpeed
+				end
+			end
+		end)
+
+		UserInputService.InputEnded:Connect(function(Input)
+			if not Typing then
+				if Input.KeyCode == Enum.KeyCode.W then
+					Control.F = 0
+				elseif Input.KeyCode == Enum.KeyCode.S then
+					Control.B = 0
+				elseif Input.KeyCode == Enum.KeyCode.A then
+					Control.L = 0
+				elseif Input.KeyCode == Enum.KeyCode.D then
+					Control.R = 0
+				end
+			end
+		end)
+	end,
+
+	NoClip = function()
+		UserInputService.InputBegan:Connect(function(Input)
+			if Input.KeyCode == Settings.NoClipKeybind and not Typing and Settings.Miscellaneous.NoClip then
+				NoClipping = not NoClipping
+			end
+		end)
+
+		RunService.RenderStepped:Connect(function()
+			if NoClipping and Settings.Miscellaneous.NoClip then
+				if LocalPlayer.Character and FindFirstChildOfClass(LocalPlayer.Character, "Humanoid") then
+					for _, v in next, Parts do
+						if not v == "Random" then
+							LocalPlayer.Character[v].CanCollide = false
+						end
+					end
+				end
+			end
+		end)
+	end,
+
+	FullBrightCallback = function(Value)
+		Settings.Miscellaneous.FullBright = Value
+
+		for i, v in next, Settings.Miscellaneous.FullBright and FullBrightValues or OldLightingValues do
+			Lighting[i] = v
+		end
+	end,
+
+	AutoFarm = function(self)
+		if not Farming and Settings.Character.AutoFarm and LocalPlayer.Character and not Teleporting then
+			Farming = true; self.RagdollCallback(); CoreFunctions.Teleport(
+				Settings.Character.AutoFarmLocation == "Grayridge" and Vector3new(1478, 133, 1658) or
+				Settings.Character.AutoFarmLocation == "Tumbleweed" and Vector3new(-326, 14, -10), true)
+
+			repeat wait() until Settings.Character.AutoFarm and not Teleporting and LocalPlayer.Character and Farming
+
+			repeat
+				wait(); local ClosestRegister = CoreFunctions.GetClosestCashRegister(); GeneralEvents.Rob:FireServer(
+					"Register", {
+						ActiveValue = ClosestRegister.Active,
+						Active = true,
+						Part = ClosestRegister.Union,
+						OpenPart = ClosestRegister.Open
+					})
+			until LocalPlayer.States.Bag.Value == LocalPlayer.Stats.BagSizeLevel.CurrentAmount.Value and Settings.Character.AutoFarm and LocalPlayer.Character and Farming
+
+			CoreFunctions.Teleport(
+				Settings.Character.AutoFarmLocation == "Grayridge" and LocationsVectors.FortArthur or
+				Settings.Character.AutoFarmLocation == "Tumbleweed" and LocationsVectors.FortCassidy_SAFE, true)
+
+			repeat wait() until LocalPlayer.States.Bag.Value == 0 and Settings.Character.AutoFarm and not Teleporting and LocalPlayer.Character and Farming
+
+			Farming = false; self.RagdollCallback()
+		end
+	end,
+
+	AutoFarm_Remote = function()
+		if not Settings.Character.AutoFarm then return end
+
+		ReplicatedStorage.Quests.Events.QuestEvent:FireServer({
+			QuestType = "Tutorial",
+			Action = "QuestsActiveChanged",
+			Active = true
+		})
+
+		ReplicatedStorage.Quests.Events.QuestEvent:FireServer({
+			Action = "Activate",
+			QuestName = "Kill an outlaw and collect the bounty",
+			QuestId = 1030,
+			QuestType = "Tutorial"
+		})
+
+		ReplicatedStorage.Quests.Events.QuestFunction:InvokeServer({
+			Action = "ClearActiveQuest",
+			QuestName = "Kill an outlaw and collect the bounty",
+			QuestId = 1030,
+			QuestType = "Tutorial"
+		})
+	end,
+
+	Triggerbot = function()
+		if Settings.Triggerbot.Enabled and Mouse.Target and FindFirstChildOfClass(Mouse.Target.Parent, "Humanoid") and GetPlayerFromCharacter(Mouse.Target.Parent) and FindFirstChildOfClass(LocalPlayer.Character, "Tool") then
+			if Settings.Triggerbot.Delay / 100 ~= 0 then
+				task.wait(Settings.Triggerbot.Delay / 100)
+			end
+
+			mouse1press(); task.wait(0); mouse1release()
+		end
+	end,
+
+	OnCharacter = function(self, Character)
+		delay(1, function()
+			if Debounce then return end; Debounce = true
+
+			Character = Character or WaitForChild(LocalPlayer.Character, "Humanoid").Parent
+
+			for _, v in next, getgc() do
+				if type(v) == "function" and getfenv(v).script then
+					if getfenv(v).script.Name == "GunLocalModule" and Settings.SilentAim.Enabled then
+						if getinfo(v).name == "shootBullet" then
+							local function SilentAim(Arguments)
+								local ClosestPlayer = CoreFunctions.GetClosestPlayer()
+
+								if ClosestPlayer and Settings.SilentAim.Enabled and (100 * mathrandom()) < Settings.SilentAim.HitChance then
+									Arguments[1].GunStats.FiringOffset = CFramenew(Vector3zero, Vector3zero, Vector3zero)
+									Arguments[3] = ClosestPlayer.Character[Settings.HitPart].Position
+								end
+
+								return unpack(Arguments)
+							end
+
+							local Old; Old = hookfunction(v, function(...)
+								Old(SilentAim({ ... }))
+							end)
+						end
+					else
+						if getinfo(v).name == "SetUpContextHoldGui" and Settings.Character.AutoBreakFree then
+							local Old; Old = hookfunction(function(...)
+								---@diagnostic disable-next-line: undefined-field
+								if ({ ... }).Title == "Struggle" and Settings.Character.AutoBreakFree then
+									GeneralEvents.LassoEvents:FireServer("BreakFree")
+								else
+									Old(...)
+								end
+							end, v)
+						elseif getinfo(v).name == "ContextHoldFunc" and Settings.Character.InstantContextAction then
+							local Old; Old = hookfunction(v, function(...)
+								local Arguments = { ... }; Arguments[#Arguments] = Settings.Character
+									.InstantContextAction and 0 or Arguments[#Arguments]
+
+								Old(unpack(Arguments))
+							end)
+						end
+					end
+				end
+			end
+
+			delay(0.5, self.EditJumpingStamina)
+
+			delay(1, function()
+				self.ChangeWalkSpeed(CharacterValues.WalkSpeed)
+				self.ChangeJumpPower(CharacterValues.JumpPower)
+			end)
+
+			wait(); WaitForChild(Character, "Humanoid", 1 / 0).Died:Connect(function()
+				Flying, Farming, Teleporting = false, false, false
+
+				if Settings.Character.InstantRespawn or Settings.Character.AutoFarm then
+					self.Respawn()
+				end
+			end)
+
+			PrevHealth = WaitForChild(Character, "Humanoid", 1 / 0).Health
+
+			WaitForChild(Character, "Humanoid", 1 / 0).Changed:Connect(function()
+				local _Character = LocalPlayer.Character
+				local Humanoid = FindFirstChildOfClass(_Character, "Humanoid")
+
+				if _Character and Humanoid and Humanoid.Health < PrevHealth and Humanoid.Health <= 30 and Humanoid.Health > 0 and Settings.Character.AutoHeal and not HealDebounce then
+					PrevHealth, HealDebounce = LocalPlayer.Character.Humanoid.Health, true
+
+					if LocalPlayer.Consumables["Health Potion"].Value > 0 then
+						local Potion = LocalPlayer.Backpack["Health Potion"] or LocalPlayer.Character["Health Potion"]
+
+						if Potion then
+							Potion.DrinkPotion:InvokeServer()
+
+							StarterGui:SetCore("SendNotification", {
+								Title = "westbound.pro",
+								Text = stringformat("Used health potion, potions left: %s.",
+									tostring(LocalPlayer.Consumables["Health Potion"].Value)),
+								Duration = 3,
+								Icon = "rbxassetid://6238537240",
+							})
+						else
+							StarterGui:SetCore("SendNotification", {
+								Title = "westbound.pro",
+								Text = "Unable to find potion!",
+								Duration = 3,
+								Icon = "rbxassetid://6238553573",
+							})
+						end
+					else
+						StarterGui:SetCore("SendNotification", {
+							Title = "westbound.pro",
+							Text = "You are out of health potions!",
+							Duration = 3,
+							Icon = "rbxassetid://6238540373",
+						})
+					end
+
+					task.wait(1); HealDebounce, PrevHealth = false, Humanoid.Health or 0
+				end
+			end)
+
+			task.wait(5); Debounce = false
+		end)
+	end
+}
+
+OldNamecall, OldNewIndex, OldIndex = hookmetamethod(game, "__namecall", newcclosure(function(...)
+	local NamecallMethod, Self, Arguments = getnamecallmethod(), ..., { select(2, ...) }
+
+	if not checkcaller() then
+		if NamecallMethod == "FireServer" then
+			if Self.Name == "GunShot" then
+				Functions.ModGuns()
+			elseif Self.Name == "ChangeCharacter" then
+				if Arguments[1] == "Damage" then
+					Arguments[2] = Settings.Character.NoFallDamage and 0 or Teleporting and 0 or Farming and 0 or
+						Flying and 0 or Arguments[2]
+
+					return Self.FireServer(Self, unpack(Arguments))
+				elseif Arguments[1] == "Ragdoll" and (Settings.Character.AntiRagdoll or Teleporting or Farming or Flying) then
+					return nil
+				end
+			end
+		elseif NamecallMethod == "SetStateEnabled" then
+			if Self == LocalPlayer.Character.Humanoid then
+				if Arguments[1] == Enum.HumanoidStateType.Jumping and Arguments[2] == false then
+					Arguments[2] = Settings.Character.NoJumpCooldown and true or false
+
+					return Self.SetStateEnabled(Self, unpack(Arguments))
+				end
+			end
+		elseif NamecallMethod == "Clone" then
+			if Self.Name == "Cash" and Self.ClassName == "TextLabel" and Settings.Character.DisableCashNotification then
+				return nil
+			end
+		end
+	end
+
+	return OldNamecall(...)
+end)), hookmetamethod(game, "__newindex", function(...)
+	local Self, Key, Value = ...
+
+	if not checkcaller() then
+		if tostring(Self) == "Humanoid" and Key == "JumpPower" and Value ~= CharacterValues.JumpPower and CharacterValues.JumpPower > 45 then
+			Self[Key] = CharacterValues.JumpPower
+		end
+	end
+
+	return OldNewIndex(...)
+end), hookmetamethod(workspace.Horses, "__index", function(...)
+	local Self, Key = ...
+
+	if not checkcaller() and tostring(Self) == "CurrentStamina" and Key == "Value" and Settings.Character.InfiniteGallopStamina then
+		return 400
+	end
+
+	return OldIndex(...)
 end)
 
-LocalPlayer.CharacterAdded:Connect(function()
-    ICA_Hooked = false
-    if getgenv().InstantContextAction then
-        task.wait(0.5) -- รอ environment ของตัวละครใหม่
-        hookInstantContextAction()
-        print("[Westbound.win] Re-hooked Instant Context Action after respawn")
-    end
-end)
-	local ModAssistSectionMods = Tabs.ModAndAssist:AddSection("Mods");
-	local GunToggle = ModAssistSectionMods:AddToggle("GunModToggle", {Title="Enable Gun Mods",Default=false});
-	GunToggle:OnChanged(function(value)
-		local success, list = pcall(function()
-			return require(ReplicatedStorage.GunScripts.GunStats);
-		end);
-		if (success and list and value) then
-			for _, v in pairs(list) do
-				pcall(function()
-					v.Spread = 0;
-					v.prepTime = 0;
-					v.equipTime = 0.1;
-					v.MaxShots = math.huge;
-					v.ReloadSpeed = 0;
-					v.BulletSpeed = 250;
-					v.HipFireAccuracy = 0;
-					v.ZoomAccuracy = 0;
-					v.camShakeResist = 0;
-					v.AutoFire = true;
-				end);
-			end
-		end
-	end);
-	local StaminaToggle = ModAssistSectionMods:AddToggle("InfiniteGallopToggle", {Title="Infinite Gallop Stamina",Default=false});
-	local OldIndex;
-	OldIndex = hookmetamethod(game, "__index", function(Self, Key)
-		if (not checkcaller() and (tostring(Self) == "CurrentStamina") and (Key == "Value")) then
-			if StaminaToggle.Value then
-				return 400;
-			end
-		end
-		return OldIndex(Self, Key);
-	end);
-	SaveManager:SetLibrary(Fluent);
-	InterfaceManager:SetLibrary(Fluent);
-	SaveManager:IgnoreThemeSettings();
-	InterfaceManager:SetFolder("FluentScriptHub");
-	SaveManager:SetFolder("FluentScriptHub/specific-game");
-	SaveManager:LoadAutoloadConfig();
-	InterfaceManager:BuildInterfaceSection(Tabs.Settings);
-	SaveManager:BuildConfigSection(Tabs.Settings);
-	Window:SelectTab(1);
-	if ScriptModule.FirstRun then
-		Fluent:Notify({Title="Westbound.win",Content="Success Fully Load!",Duration=5});
+local OldPrint = nil; OldPrint = hookfunction(print, function(...)
+	if select("#", ...) == 1 and ... == "dino was here :)" then
+		return nil
 	end
-end;
-return ScriptModule;
+
+	return OldPrint(...)
+end)
+
+local Library, ColorPallete =
+	loadstring(HttpGet("https://raw.githubusercontent.com/Exunys/westbound.pro-Utilites/main/UI%20Library.lua"))().new(
+		stringformat("westbound.pro [%s]", Version)), {
+		Background = Color3.fromRGB(20, 10, 40),
+		Glow = Color3.fromRGB(180, 120, 255),
+		Accent = Color3.fromRGB(80, 40, 120),
+		LightContrast = Color3.fromRGB(60, 30, 90),
+		DarkContrast = Color3.fromRGB(30, 15, 60),
+		TextColor = Color3.fromRGB(220, 180, 255)
+	}
+
+local Combat = Library:addPage("Combat", 12412925815)
+local Combat_General, Combat_SilentAim, Combat_Aimbot, Combat_GunMods = Combat:addSection("General"),
+	Combat:addSection("Silent Aim"), Combat:addSection("Aimbot"), Combat:addSection("Gun Mods")
+
+for i, v in next, ColorPallete do
+	Library:setTheme(i, v)
+end
+
+Combat_General:addToggle("FOV Enabled", Settings.FOV.Enabled, function(Value)
+	Settings.FOV.Enabled = Value
+end)
+
+Combat_General:addSlider("Field Of View", Settings.FOV.Amount, 10, 600, function(Value)
+	Settings.FOV.Amount = Value
+end)
+
+Combat_General:addDropdown("Hit Part (" .. Settings.HitPart .. ")", Parts, function(Value)
+	Settings.HitPart = Value
+end)
+
+Combat_SilentAim:addToggle("Enabled", Settings.SilentAim.Enabled, function(Value)
+	Settings.SilentAim.Enabled = Value; Functions:OnCharacter()
+end)
+
+Combat_SilentAim:addToggle("Wall Check", Settings.SilentAim.WallCheck, function(Value)
+	Settings.SilentAim.WallCheck = Value
+end)
+
+Combat_SilentAim:addSlider("Hit Chance", Settings.SilentAim.HitChance, 1, 100, function(Value)
+	Settings.SilentAim.HitChance = Value
+end)
+
+Combat_Aimbot:addToggle("Enabled", Aimbot.Settings.Enabled, function(Value)
+	Aimbot.Settings.Enabled = Value
+end)
+
+Combat_Aimbot:addToggle("Wall Check", Aimbot.Settings.WallCheck, function(Value)
+	Aimbot.Settings.WallCheck = Value
+end)
+
+Combat_Aimbot:addToggle("Toggle", Aimbot.Settings.Toggle, function(Value)
+	Aimbot.Settings.Toggle = Value
+end)
+
+Combat_Aimbot:addSlider("Sensitivity", Aimbot.Settings.Sensitivity * 100, 0, 100, function(Value)
+	Aimbot.Settings.Sensitivity = Value / 100
+end)
+
+Combat_Aimbot:addToggle("Third Person", Aimbot.Settings.ThirdPerson, function(Value)
+	Aimbot.Settings.ThirdPerson = Value
+end)
+
+Combat_Aimbot:addSlider("Third Person Sensitivity", Aimbot.Settings.ThirdPersonSensitivity * 10, 1, 50, function(Value)
+	Aimbot.Settings.ThirdPersonSensitivity = Value / 10
+end)
+
+Combat_Aimbot:addTextbox("Hotkey", Aimbot.Settings.TriggerKey, function(Value)
+	Aimbot.Settings.TriggerKey = Value
+end)
+
+Combat_Aimbot:addToggle("FOV Circle Filled", Aimbot.FOVSettings.Filled, function(Value)
+	Aimbot.FOVSettings.Filled = Value
+end)
+
+Combat_Aimbot:addSlider("FOV Circle Transparency", Aimbot.FOVSettings.Transparency * 100, 1, 100, function(Value)
+	Aimbot.FOVSettings.Transparency = Value / 100
+end)
+
+Combat_Aimbot:addSlider("FOV Circle Sides", Aimbot.FOVSettings.Sides, 3, 60, function(Value)
+	Aimbot.FOVSettings.Sides = Value
+end)
+
+Combat_Aimbot:addSlider("FOV Circle Thickness", Aimbot.FOVSettings.Thickness, 1, 5, function(Value)
+	Aimbot.FOVSettings.Thickness = Value
+end)
+
+Combat_Aimbot:addColorPicker("FOV Circle Color", Aimbot.FOVSettings.Color, function(Value)
+	Aimbot.FOVSettings.Color = Value
+end)
+
+Combat_Aimbot:addColorPicker("FOV Circle Locked Color", Aimbot.FOVSettings.LockedColor, function(Value)
+	Aimbot.FOVSettings.LockedColor = Value
+end)
+
+for i, v in next, Settings.GunMods do
+	Combat_GunMods:addToggle(i == "InfiniteAmmo" and "Infinite Ammo (PATCHED)" or CoreFunctions.SeparateUpper(i), v,
+		function(Value)
+			Settings.GunMods[i] = Value
+		end)
+end
+
+Library:SelectPage(Combat, true)
+
+local Visuals = Library:addPage("Visuals", 12433857701)
+local Visuals_General, Visuals_ESP, Visuals_Tracers, Visuals_Boxes, Visuals_HeadDots, Visuals_Crosshair =
+	Visuals:addSection("General"), Visuals:addSection("ESP"), Visuals:addSection("Tracers"), Visuals:addSection("Boxes"),
+	Visuals:addSection("Head Dots"), Visuals:addSection("Crosshair")
+
+for i, v in next, WallHack.Settings do
+	Visuals_General:addToggle(CoreFunctions.SeparateUpper(i), v, function(Value)
+		WallHack.Settings[i] = Value
+	end)
+end
+
+for i, v in next, WallHack.Visuals.ESPSettings do
+	if i == "TextFont" then
+	end
+	if typeof(v) == "boolean" then
+		Visuals_ESP:addToggle(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Visuals.ESPSettings[i] = Value
+		end)
+	elseif typeof(v) == "Color3" then
+		Visuals_ESP:addColorPicker(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Visuals.ESPSettings[i] = Value
+		end)
+	elseif typeof(v) == "number" then
+		Visuals_ESP:addSlider(CoreFunctions.SeparateUpper(i), v < 1 and v * 100 or v, v < 1 and 1 or 8,
+			v < 1 and 100 or 24, function(Value)
+				WallHack.Visuals.ESPSettings[i] = v < 1 and Value / 100 or Value
+			end)
+	end
+end
+
+Visuals_ESP:addDropdown("Text Font (UI)", Fonts, function(Value)
+	WallHack.Visuals.ESPSettings.TextFont = Drawing.Fonts[Value]
+end)
+
+for i, v in next, WallHack.Visuals.TracersSettings do
+	if i == "Type" then
+	end
+
+	if typeof(v) == "boolean" then
+		Visuals_Tracers:addToggle(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Visuals.TracersSettings[i] = Value
+		end)
+	elseif typeof(v) == "Color3" then
+		Visuals_Tracers:addColorPicker(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Visuals.TracersSettings[i] = Value
+		end)
+	elseif typeof(v) == "number" then
+		Visuals_Tracers:addSlider(CoreFunctions.SeparateUpper(i), v < 1 and v * 100 or v, v < 1 and 1 or 1,
+			v < 1 and 100 or 5, function(Value)
+				WallHack.Visuals.TracersSettings[i] = v < 1 and Value / 100 or Value
+			end)
+	end
+end
+
+Visuals_Tracers:addDropdown("Start From (Bottom)", TracersType, function(Value)
+	WallHack.Visuals.TracersSettings.Type = tablefind(TracersType, Value)
+end)
+
+for i, v in next, WallHack.Visuals.BoxSettings do
+	if i == "Type" then
+	end
+	if typeof(v) == "boolean" then
+		Visuals_Boxes:addToggle(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Visuals.BoxSettings[i] = Value
+		end)
+	elseif typeof(v) == "Color3" then
+		Visuals_Boxes:addColorPicker(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Visuals.BoxSettings[i] = Value
+		end)
+	elseif typeof(v) == "number" then
+		Visuals_Boxes:addSlider(CoreFunctions.SeparateUpper(i), v < 1 and v * 100 or v, v < 1 and 1 or 1,
+			v < 1 and 100 or 5, function(Value)
+				WallHack.Visuals.BoxSettings[i] = v < 1 and Value / 100 or Value
+			end)
+	end
+end
+
+Visuals_Boxes:addDropdown("Box Type (" .. WallHack.Visuals.BoxSettings.Type == 1 and "3D" or "2D" .. ")", { "3D", "2D" },
+	function(Value)
+		WallHack.Visuals.BoxSettings.Type = Value == "3D" and 1 or Value == "2D" and 2
+	end)
+
+for i, v in next, WallHack.Visuals.HeadDotSettings do
+	if i == "Type" then
+	end
+
+	if typeof(v) == "boolean" then
+		Visuals_HeadDots:addToggle(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Visuals.HeadDotSettings[i] = Value
+		end)
+	elseif typeof(v) == "Color3" then
+		Visuals_HeadDots:addColorPicker(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Visuals.HeadDotSettings[i] = Value
+		end)
+	elseif typeof(v) == "number" and i ~= "Sides" then
+		Visuals_HeadDots:addSlider(CoreFunctions.SeparateUpper(i), v < 1 and v * 100 or v, v < 1 and 1 or 1,
+			v < 1 and 100 or 5, function(Value)
+				WallHack.Visuals.HeadDotSettings[i] = v < 1 and Value / 100 or Value
+			end)
+	end
+end
+
+Visuals_HeadDots:addSlider("Sides", WallHack.Visuals.HeadDotSettings.Sides, 3, 30, function(Value)
+	WallHack.Visuals.HeadDotSettings.Sides = Value
+end)
+
+for i, v in next, WallHack.Crosshair.Settings do
+	if i == "Type" then
+	end
+
+	if typeof(v) == "boolean" then
+		Visuals_Crosshair:addToggle(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Crosshair.Settings[i] = Value
+		end)
+	elseif typeof(v) == "Color3" then
+		Visuals_Crosshair:addColorPicker(CoreFunctions.SeparateUpper(i), v, function(Value)
+			WallHack.Crosshair.Settings[i] = Value
+		end)
+	elseif typeof(v) == "number" then
+		if stringfind(i, "Transparency") then
+			Visuals_Crosshair:addSlider(CoreFunctions.SeparateUpper(i), v * 100, 1, 100, function(Value)
+				WallHack.Crosshair.Settings[i] = Value / 100
+			end)
+		elseif i == "Size" then
+			Visuals_Crosshair:addSlider(CoreFunctions.SeparateUpper(i), v, 8, 24, function(Value)
+				WallHack.Crosshair.Settings[i] = Value
+			end)
+		elseif i == "GapSize" then
+			Visuals_Crosshair:addSlider(CoreFunctions.SeparateUpper(i), v, 0, 20, function(Value)
+				WallHack.Crosshair.Settings[i] = Value
+			end)
+		elseif i == "CenterDotSize" then
+			Visuals_Crosshair:addSlider(CoreFunctions.SeparateUpper(i), v, 1, 6, function(Value)
+				WallHack.Crosshair.Settings[i] = Value
+			end)
+		elseif stringfind(i, "Thickness") then
+			Visuals_Crosshair:addSlider(CoreFunctions.SeparateUpper(i), v, 1, 5, function(Value)
+				WallHack.Crosshair.Settings[i] = Value
+			end)
+		end
+	end
+end
+
+Visuals_Crosshair:addDropdown("Position (" .. WallHack.Crosshair.Settings.Type == 1 and "Mouse" or "Center" .. ")",
+	{ "Mouse", "Center" }, function(Value)
+		WallHack.Crosshair.Settings.Type = Value == "Mouse" and 1 or Value == "Center" and 2
+	end)
+
+local MouseIconConnection = RunService.RenderStepped:Connect(function()
+	UserInputService.MouseIconEnabled = UserInputService.MouseIconEnabled
+end)
+
+Visuals_Crosshair:addToggle("Mouse Cursor", UserInputService.MouseIconEnabled, function(Value)
+	MouseIconConnection:Disconnect()
+
+	MouseIconConnection = RunService.RenderStepped:Connect(function()
+		UserInputService.MouseIconEnabled = Value
+	end)
+end)
+
+local MyScript = Library:addPage("ESP Legendary", 12413838306)
+local ESP_Section = MyScript:addSection("ESP Legendary Animals")
+
+local ESP_Settings = {
+	Enabled = true,
+}
+
+local espRunning = false
+
+local function StartESP()
+	if espRunning then return end
+	espRunning = true
+	ESP_Settings.Enabled = true
+
+	task.spawn(function()
+		local Players = game:GetService("Players")
+		local RunService = game:GetService("RunService")
+		local LocalPlayer = Players.LocalPlayer
+		local Camera = workspace.CurrentCamera
+
+		local Notification
+		local success, module = pcall(function()
+			return require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("NotificationModule"))
+		end)
+		if success and typeof(module) == "function" then
+			Notification = module
+		else
+			warn("[ESP] ❌ Failed to load NotificationModule.")
+		end
+
+		local targetNames = {
+			"legendarydirewolf",
+			"legendarybison",
+			"legendarygrizzlybear",
+			"legendaryblackbear",
+			"legendarywolf",
+			"legendarymoosebull",
+			"direwolf"
+		}
+
+		local defaultColor = Color3.fromRGB(255, 50, 50)
+		local notifyColor = Color3.fromRGB(204, 102, 255)
+
+		local settings = {
+			espEnabled = true,
+			showSelectionBox = true,
+			maxDisplayDistance = 5000
+		}
+
+		local espCache = {}
+		local connections = {}
+
+		local customNames = {
+			legendarydirewolf = { name = "Legendary Direwolf", color = notifyColor },
+			legendarybison = { name = "Legendary Bison", color = notifyColor },
+			legendarygrizzlybear = { name = "Legendary Grizzly Bear", color = notifyColor },
+			legendaryblackbear = { name = "Legendary Black Bear", color = notifyColor },
+			legendarywolf = { name = "Legendary Wolf", color = notifyColor },
+			legendarymoosebull = { name = "Legendary Moose Bull", color = notifyColor },
+			direwolf = { name = "Direwolf", color = notifyColor }
+		}
+
+		local customNamesOrdered = {
+			"legendarydirewolf",
+			"legendarybison",
+			"legendarygrizzlybear",
+			"legendaryblackbear",
+			"legendarywolf",
+			"legendarymoosebull",
+			"direwolf"
+		}
+
+		local function getCustomNameAndColor(model)
+			local nameLower = model.Name:lower()
+			for _, key in ipairs(customNamesOrdered) do
+				local value = customNames[key]
+				if value and nameLower:find(key) then
+					return value.name, value.color
+				end
+			end
+			return model.Name, defaultColor
+		end
+
+		local function isTargetModel(model)
+			if not model then return false end
+			local modelName = tostring(model.Name):lower()
+			local humanoid = model:FindFirstChildOfClass("Humanoid")
+			local displayName = humanoid and humanoid.DisplayName and tostring(humanoid.DisplayName):lower() or ""
+			for _, t in ipairs(targetNames) do
+				if modelName:find(t) or displayName:find(t) then
+					return true
+				end
+			end
+			return false
+		end
+
+		local function getAdornee(model)
+			local head = model:FindFirstChild("Head")
+			if head and head:IsA("BasePart") then return head end
+			if model.PrimaryPart and model.PrimaryPart:IsA("BasePart") then return model.PrimaryPart end
+			for _, v in pairs(model:GetChildren()) do
+				if v:IsA("BasePart") then return v end
+			end
+			return nil
+		end
+
+		local function createESPForModel(model)
+			if espCache[model] then return end
+			local adornee = getAdornee(model)
+			if not adornee then return end
+
+			local billboard = Instance.new("BillboardGui")
+			billboard.Name = "ESP_Billboard"
+			billboard.Adornee = adornee
+			billboard.Size = UDim2.new(0, 150, 0, 40)
+			billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+			billboard.AlwaysOnTop = true
+			billboard.ResetOnSpawn = false
+			billboard.Enabled = settings.espEnabled
+			billboard.Parent = game:GetService("CoreGui")
+
+			local textLabel = Instance.new("TextLabel")
+			textLabel.Name = "ESPLabel"
+			textLabel.Size = UDim2.new(1, 0, 1, 0)
+			textLabel.BackgroundTransparency = 1
+			local nameText, color = getCustomNameAndColor(model)
+			textLabel.TextColor3 = color
+			textLabel.TextStrokeTransparency = 0.5
+			textLabel.TextSize = 18
+			textLabel.Font = Enum.Font.SourceSansBold
+			textLabel.Text = nameText
+			textLabel.Parent = billboard
+		end
+
+		local function removeAllESP()
+			for _, data in pairs(espCache) do
+				if data.billboard then pcall(function() data.billboard:Destroy() end) end
+				if data.selection then pcall(function() data.selection:Destroy() end) end
+			end
+			espCache = {}
+		end
+
+		local function updateAllESP()
+			for model, data in pairs(espCache) do
+				if not model or not model.Parent then
+					if data.billboard then data.billboard:Destroy() end
+					if data.selection then data.selection:Destroy() end
+					espCache[model] = nil
+				else
+					local adornee = data.adornee
+					local label = data.label
+					local billboard = data.billboard
+					local selection = data.selection
+					local dist = math.huge
+					if adornee and adornee:IsA("BasePart") and Camera then
+						dist = (Camera.CFrame.Position - adornee.Position).Magnitude
+					end
+					if dist > settings.maxDisplayDistance or not settings.espEnabled then
+						billboard.Enabled = false
+						if selection then selection.Parent = nil end
+					else
+						billboard.Enabled = true
+						if selection and not selection.Parent then selection.Parent = Camera end
+					end
+					local nameText, color = getCustomNameAndColor(model)
+					label.Text = string.format("%s\n%.1fm", nameText, dist)
+					label.TextColor3 = color
+					if selection then selection.Color3 = color end
+				end
+			end
+		end
+
+		local function createAllESP()
+			for _, obj in ipairs(workspace:GetDescendants()) do
+				if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") and isTargetModel(obj) then
+					createESPForModel(obj)
+				end
+			end
+		end
+
+		createAllESP()
+
+		table.insert(connections, workspace.DescendantAdded:Connect(function(obj)
+			if not espRunning then return end
+			if obj:IsA("Model") and isTargetModel(obj) then
+				task.spawn(function()
+					local adornee
+					for i = 1, 20 do
+						adornee = getAdornee(obj)
+						if adornee then break end
+						task.wait(0.05)
+					end
+					if adornee then
+						createESPForModel(obj)
+						local nameText, _ = getCustomNameAndColor(obj)
+						if Notification then
+							Notification(nameText .. " has spawned!", notifyColor)
+						end
+					end
+				end)
+			end
+		end))
+
+		table.insert(connections, RunService.RenderStepped:Connect(function()
+			if espRunning then updateAllESP() end
+		end))
+
+		while ESP_Settings.Enabled do
+			task.wait(1)
+		end
+
+		removeAllESP()
+		for _, con in ipairs(connections) do
+			if con and con.Disconnect then
+				con:Disconnect()
+			end
+		end
+		espRunning = false
+		print("[ESP] Terminated.")
+	end)
+end
+
+
+StartESP()
+
+ESP_Section:addToggle("ESP Enabled", ESP_Settings.Enabled, function(Value)
+	ESP_Settings.Enabled = Value
+	if Value then
+		StartESP()
+	else
+		ESP_Settings.Enabled = false
+	end
+end)
+
+local Character = Library:addPage("Character", 12413774668)
+local Character_ = Character:addSection("Character")
+
+Character_:addToggle("No Fall Damage", Settings.Character.NoFallDamage, function(Value)
+	Settings.Character.NoFallDamage = Value
+end)
+
+Character_:addToggle("No Jump Cooldown", Settings.Character.NoJumpCooldown, function(Value)
+	Settings.Character.NoJumpCooldown = Value; Functions.EditJumpingStamina()
+end)
+
+Character_:addToggle("Infinite Horse Gallop Stamina", Settings.Character.InfiniteGallopStamina, function(Value)
+	Settings.Character.InfiniteGallopStamina = Value
+end)
+
+Character_:addToggle("Auto Heal", Settings.Character.AutoHeal, function(Value)
+	Settings.Character.AutoHeal = Value
+end)
+
+Character_:addToggle("Instant Context Actions (Skin, Rob, Take...)", Settings.Character.InstantContextAction,
+	function(Value)
+		Settings.Character.InstantContextAction = Value; Functions:OnCharacter()
+	end)
+
+Character_:addSlider("WalkSpeed", LocalPlayer.Character and CharacterValues.WalkSpeed, 13, 250, Functions
+	.ChangeWalkSpeed)
+
+Character_:addSlider("JumpPower", LocalPlayer.Character and CharacterValues.JumpPower or 45, 45, 500,
+	Functions.ChangeJumpPower)
+
+Character_:addButton("Become Outlaw", function()
+	LocalPlayer.Team = Teams.Outlaws
+end)
+
+Character_:addButton("Become Cowboy", function()
+	LocalPlayer.Team = Teams.Cowboys
+end)
+
+local Miscellaneous = Library:addPage("Miscellaneous", 12413792680)
+local Miscellaneous_ = Miscellaneous:addSection("Miscellaneous")
+
+Miscellaneous_:addToggle("Full Bright", Settings.Miscellaneous.FullBright, Functions.FullBrightCallback)
+
+Miscellaneous_:addColorPicker("Full Bright Ambient Color", Settings.Miscellaneous.AmbientColor, function(Value)
+	Settings.Miscellaneous.AmbientColor = Value
+
+	FullBrightValues = {
+		FogColor = Settings.Miscellaneous.AmbientColor,
+		FogEnd = 1 / 0,
+		FogStart = 1 / 0,
+		Ambient = Settings.Miscellaneous.AmbientColor,
+		Brightness = 5,
+		ColorShift_Bottom = Settings.Miscellaneous.AmbientColor,
+		ColorShift_Top = Settings.Miscellaneous.AmbientColor,
+		OutdoorAmbient = Settings.Miscellaneous.AmbientColor,
+		Outlines = true
+	}
+end)
+
+Miscellaneous_:addToggle("Anti AFK", Settings.Miscellaneous.AntiAFK, function(Value)
+	Settings.Miscellaneous.AntiAFK = Value
+end)
+
+Miscellaneous_:addToggle("Unfocused Window CPU & GPU Saver", Settings.Miscellaneous.OptimizeUponUnfocus, function(Value)
+	Settings.Miscellaneous.OptimizeUponUnfocus = Value
+end)
+
+Miscellaneous_:addSlider("FPS Boost", 60, 60, 360, setfpscap)
+
+Miscellaneous_:addToggle("(PATCHED) Fly Enabled", Settings.Miscellaneous.Fly, function(Value)
+	Settings.Miscellaneous.Fly = Value; Flying = false
+end)
+
+Miscellaneous_:addSlider("(PATCHED) Fly Speed", Settings.Miscellaneous.FlySpeed, 1, 10, function(Value)
+	Settings.Miscellaneous.FlySpeed = Value
+end)
+
+Miscellaneous_:addKeybind("(PATCHED) Toggle Fly", Settings.Miscellaneous.FlyKeybind, function()
+	if not Typing then
+		Flying = not Flying; Functions.Fly()
+	end
+end, function(Value)
+	Settings.Miscellaneous.FlyKeybind = Value
+end)
+
+Miscellaneous_:addButton("Rejoin Game", function()
+	Library:Notify("westbound.pro", "This function will unload the script, are you sure you want to rejoin the game?",
+		function(Value)
+			if Value then
+				Library:toggle(); TeleportService:Teleport(game.PlaceId, LocalPlayer)
+			end
+		end)
+end)
+
+local SettingsPage = Library:addPage("Settings", 12413797746)
+local Settings_ = SettingsPage:addSection("Settings")
+
+Settings_:addKeybind("Show/Hide GUI", Settings.ToggleKeybind, function()
+	if not Typing then
+		Library:toggle()
+	end
+end, function(Value)
+	Settings.CloseKeybind = Value
+end)
+
+Settings_:addButton("Reset Config", function()
+	if not isfile or not isfile("AirTeam/westbound.pro/Config.json") then return end
+
+	Library:Notify("westbound.pro",
+		"This function will unload the script and reset your settings, are you sure you want to continue?",
+		function(Value)
+			if Value then
+				delfile("AirTeam/westbound.pro/Config.json")
+				Library:toggle(); TeleportService:Teleport(game.PlaceId, LocalPlayer)
+			end
+		end)
+end)
+
+Functions:OnCharacter(); LocalPlayer.CharacterAdded:Connect(function(CharacterObj)
+	return Functions:OnCharacter(CharacterObj)
+end)
+
+UserInputService.TextBoxFocused:Connect(function()
+	Typing = true
+end)
+
+UserInputService.TextBoxFocusReleased:Connect(function()
+	Typing = false
+end)
+
+for i, _ in next, FullBrightValues do
+	OldLightingValues[i] = Lighting[i]
+end
+
+RunService.RenderStepped:Connect(function()
+	Functions.FullBrightCallback(Settings.Miscellaneous.FullBright); Functions.Triggerbot(); Functions.AutoFarm_Remote(); Functions
+		:AutoFarm()
+end)
+
+LocalPlayer.Idled:Connect(function()
+	if Settings.Miscellaneous.AntiAFK then
+		VirtualUser:Button2Down(Vector2new(0, 0), Camera.CFrame); wait(); VirtualUser:Button2Up(Vector2new(0, 0),
+			Camera.CFrame)
+	end
+end)
+
+UserInputService.WindowFocusReleased:Connect(function()
+	if Settings.Miscellaneous.OptimizeUponUnfocus then
+		RunService:Set3dRenderingEnabled(false); setfpscap(5)
+	end
+end)
+
+UserInputService.WindowFocused:Connect(function()
+	if Settings.Miscellaneous.OptimizeUponUnfocus then
+		RunService:Set3dRenderingEnabled(true); setfpscap(360)
+	end
+end)
+
+workspace.ChildAdded:Connect(function(Object)
+	if LocalPlayer.Character and Object.Name == "Cash" and Settings.Character.CollectCash then
+		Object.CFrame = LocalPlayer.Character.PrimaryPart.CFrame
+	end
+end)
+
+Notification = require(LocalPlayer.PlayerScripts.NotificationModule)
+
+Notification("successfully loaded! (" .. stringsub(tostring(tick() - Tick), 1, 4) .. " seconds)",
+	Color3fromRGB(180, 120, 255))
+
+coroutinewrap(function()
+	while task.wait(30) do
+		getgenv().AirTeam_westboundpro.Settings = Settings
+		getgenv().AirTeam_westboundpro.Aimbot = Aimbot
+		getgenv().AirTeam_westboundpro.WallHack = WallHack
+		ConfigLibrary:SaveConfig("AirTeam/westbound.pro/Config.json", getgenv().AirTeam_westboundpro)
+	end
+end)()
